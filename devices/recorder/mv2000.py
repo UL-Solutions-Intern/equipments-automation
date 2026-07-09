@@ -123,6 +123,18 @@ class MV2000Recorder(BaseRecorder):
             self.log(f"MV2000 온도 측정 오류: {e}")
             return {}
 
+    def get_temperature_channels(self, first_ch: str, last_ch: str) -> list[str]:
+        first = int(first_ch)
+        last = int(last_ch)
+
+        if first > last:
+            raise ValueError("Recorder 시작 채널은 마지막 채널보다 클 수 없습니다.")
+
+        if first < 1 or last > 48:
+            raise ValueError("MV2000 Recorder 채널은 001~048 범위로 입력하세요.")
+
+        return [f"{channel:04d}" for channel in range(first, last + 1)]
+
     # ── 내부 헬퍼 ────────────────────────────────────────────────
     def _parse_value(self, s: str) -> float | str:
         """

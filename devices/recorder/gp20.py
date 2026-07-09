@@ -86,6 +86,25 @@ class GP20Recorder(BaseRecorder):
             self.log(f"GP20 온도 측정 오류: {e}")
             return {}
 
+    def get_temperature_channels(self, first_ch: str, last_ch: str) -> list[str]:
+        first = int(first_ch)
+        last = int(last_ch)
+
+        if first > last:
+            raise ValueError("Recorder 시작 채널은 마지막 채널보다 클 수 없습니다.")
+
+        channels = []
+        for block in range(first // 100, last // 100 + 1):
+            low = max(first, block * 100 + 1)
+            high = min(last, block * 100 + 10)
+            if low <= high:
+                channels.extend(f"{channel:04d}" for channel in range(low, high + 1))
+
+        if not channels:
+            raise ValueError("유효한 GP20 Recorder 채널이 없습니다.")
+
+        return channels
+
     # ── 내부 헬퍼 ────────────────────────────────────────────────
     def _parse_value(self, s: str):
         """

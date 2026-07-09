@@ -54,9 +54,16 @@ class BaseRecorder(ABC):
     @abstractmethod
     def get_temperature_values(self, first_ch: str, last_ch: str) -> dict:
         """
-        채널별 최신 온도값을 읽어 dict로 반환.
+        채널별 온도값을 장비로부터 읽어옴
         반환 형식: {채널번호문자열: float 또는 원문문자열(결측)}
         예: {"001": 23.6, "002": 25.0, "003": "-99999999E-01"}
+        """
+
+    @abstractmethod
+    def get_temperature_channels(self, first_ch: str, last_ch: str) -> list[str]:
+        """
+        장비별 채널범위 설정
+        예: gp20 : 100단위 블록별 10개, mv2000 : 001~048
         """
 
     # ── 공통 헬퍼 ────────────────────────────────────────────────

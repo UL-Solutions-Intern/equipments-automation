@@ -16,7 +16,6 @@ from test_models import (
     DeviceStatus,
     ElectricalMode,
     TestPlan,
-    build_temperature_channels,
     build_test_conditions,
 )
 from test_runner import TestRunner
@@ -485,7 +484,10 @@ class PowerAnalyzerGUI:
             ]
         except ValueError as exc:
             raise ValueError("HR 채널은 시작,끝 형식으로 입력하세요.") from exc
-        temperature_channels = build_temperature_channels(first_channel, last_channel)
+        recorder = self.devices[RECORDER].driver
+        temperature_channels = recorder.get_temperature_channels(
+            first_channel, last_channel
+        )
 
         cvcf = self.devices[POWER_SUPPLY].driver
         if cvcf is None:
