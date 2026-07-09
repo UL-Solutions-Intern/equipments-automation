@@ -97,25 +97,6 @@ def build_test_conditions(
     ]
 
 
-def build_temperature_channels(first_channel: str, last_channel: str) -> list[str]:
-    """기존 Recorder 채널 블록 규칙(각 100번대의 01~10)을 유지한다."""
-    first = int(first_channel)
-    last = int(last_channel)
-    if first > last:
-        raise ValueError("Recorder 시작 채널은 마지막 채널보다 클 수 없습니다.")
-
-    channels = []
-    for block in range(first // 100, last // 100 + 1):
-        low = max(first, block * 100 + 1)
-        high = min(last, block * 100 + 10)
-        if low <= high:
-            channels.extend(f"{channel:04d}" for channel in range(low, high + 1))
-
-    if not channels:
-        raise ValueError("유효한 Recorder 채널이 없습니다.")
-    return channels
-
-
 def sanitize_filename(name: str) -> str:
     """시험명을 Windows에서 안전한 파일명 일부로 변환한다."""
     cleaned = re.sub(r'[<>:"/\\|?*]', "_", name.strip())
