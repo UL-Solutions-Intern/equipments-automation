@@ -60,6 +60,8 @@ class TestPlan:
     temperature_channels: list[str]
     current_limit: float | None = None
     saturation_enabled: bool = True
+    saturation_check_seconds: float | None = None
+    saturation_recheck_seconds: float | None = None
 
 
 @dataclass

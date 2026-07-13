@@ -142,7 +142,7 @@ class PowerAnalyzerGUI:
         tk.Label(setting_frame, text="시험 시간 (s):").grid(row=0, column=2, sticky="e")
         self.wait_entry = tk.Entry(setting_frame, width=10)
         self.wait_entry.grid(row=0, column=3)
-        self.wait_entry.insert(0, "6000")
+        self.wait_entry.insert(0, "5400")
 
         # 샘플링 간격 입력
         tk.Label(setting_frame, text="샘플링 간격 (s):").grid(
@@ -520,6 +520,8 @@ class PowerAnalyzerGUI:
             last_channel=last_channel,
             temperature_channels=temperature_channels,
             current_limit=current_limit,
+            saturation_check_seconds=5400,
+            saturation_recheck_seconds=600,
         )
 
     @staticmethod
