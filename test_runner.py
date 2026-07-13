@@ -17,10 +17,17 @@ from test_models import (
 class StabilizationTracker:
     """모든 온도 채널이 30분간 1.5도 미만으로 변했는지 판단한다."""
 
-    def __init__(self, channels, window_seconds=1800, max_delta=1.5):
+    def __init__(
+        self,
+        channels,
+        window_seconds=1800,
+        max_delta=1.5,
+        min_elapsed_seconds=0,
+    ):
         self.channels = list(channels)
         self.window_seconds = window_seconds
         self.max_delta = max_delta
+        self.min_elapsed_seconds = min_elapsed_seconds
         self.history = {channel: deque() for channel in self.channels}
 
     def add_sample(self, timestamp: float, temperatures: dict):
@@ -36,8 +43,10 @@ class StabilizationTracker:
             while len(history) >= 2 and history[1][0] <= cutoff:
                 history.popleft()
 
-    def is_stable(self, now: float) -> bool:
+    def is_stable(self, now: float, started_at: float) -> bool:
         if not self.channels:
+            return False
+        if now - started_at < self.min_elapsed_seconds:
             return False
 
         cutoff = now - self.window_seconds
@@ -112,12 +121,38 @@ class TestRunner:
                     recorder_started = True
                     self.recorder.recording_start()
 
-                    tracker = StabilizationTracker(plan.temperature_channels)
-                    started_at = time.monotonic()
+                    saturation_check_seconds = (
+                        plan.saturation_check_seconds
+                        if plan.saturation_check_seconds is not None
+                        else 0
+                    )
+                    saturation_recheck_seconds = (
+                        plan.saturation_recheck_seconds
+                        if plan.saturation_recheck_seconds is not None
+                        else plan.sample_interval_seconds
+                    )
 
-                    while time.monotonic() - started_at < plan.duration_seconds:
+                    tracker = StabilizationTracker(
+                        plan.temperature_channels,
+                        min_elapsed_seconds=saturation_check_seconds,
+                    )
+                    started_at = time.monotonic()
+                    deadline = started_at + plan.duration_seconds
+                    extend_until_saturation = (
+                        plan.saturation_enabled
+                        and plan.saturation_check_seconds is not None
+                    )
+                    next_saturation_check_at = (
+                        started_at + saturation_check_seconds
+                        if extend_until_saturation
+                        else started_at
+                    )
+
+                    while True:
                         if stop_event.is_set():
                             break
+                        sample_started_at = time.monotonic()
+                        is_final_sample = sample_started_at >= deadline
 
                         timestamp = datetime.now()
                         temperatures = self.recorder.get_temperature_values(
@@ -137,17 +172,42 @@ class TestRunner:
 
                         now = time.monotonic()
                         tracker.add_sample(now, temperatures)
-                        if plan.saturation_enabled and tracker.is_stable(now):
-                            self.log(
-                                "[자동중지] 모든 채널이 30분간 안정 상태 (변화량 < 1.5)"
+                        should_check_saturation = (
+                            plan.saturation_enabled
+                            and now >= next_saturation_check_at
+                        )
+                        if should_check_saturation:
+                            if tracker.is_stable(now, started_at):
+                                self.log(
+                                    "[포화] 판정 시점 기준 모든 채널의 30분 전 대비 변화량 < 1.5"
+                                )
+                                stable = True
+                                break
+                            next_saturation_check_at = (
+                                now + saturation_recheck_seconds
                             )
-                            stable = True
-                            break
+                            if now - started_at >= saturation_check_seconds:
+                                self.log(
+                                    f"[포화 미도달] CSV 기록은 계속 유지, {saturation_recheck_seconds:g}초 후 재판정"
+                                )
 
                         self.log(
                             f"[{timestamp:%Y-%m-%d %H:%M:%S}] Temps={temperatures}"
                         )
-                        if stop_event.wait(plan.sample_interval_seconds):
+
+                        if not extend_until_saturation:
+                            if is_final_sample:
+                                break
+
+                            wait_seconds = min(
+                                plan.sample_interval_seconds,
+                                max(0, deadline - time.monotonic()),
+                            )
+                        else:
+                            wait_seconds = plan.sample_interval_seconds
+                        if wait_seconds <= 0:
+                            continue
+                        if stop_event.wait(wait_seconds):
                             break
                 finally:
                     if recorder_started:
