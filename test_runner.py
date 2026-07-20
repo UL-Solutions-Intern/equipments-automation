@@ -235,7 +235,7 @@ class TestRunner:
                         except Exception as exc:
                             self.log(f"Recorder FTP download error: {exc}")
 
-                if stable or stop_event.is_set():
+                if stop_event.is_set():
                     break
 
                 if index < total_steps and plan.cooldown_seconds > 0:
