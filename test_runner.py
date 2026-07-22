@@ -71,12 +71,14 @@ class TestRunner:
         power_meter=None,
         output_folder=".",
         log_callback=print,
+        pdf_converter=None,
     ):
         self.recorder = recorder
         self.cvcf = cvcf
         self.power_meter = power_meter
         self.output_folder = Path(output_folder)
         self.log = log_callback
+        self.pdf_converter = pdf_converter
 
     def run(self, plan: TestPlan, stop_event):
         csv_file = None
@@ -232,6 +234,17 @@ class TestRunner:
                                 self.log(
                                     f"Recorder file saved: {remote_name} -> {local_path} ({size} bytes)"
                                 )
+                                if self.pdf_converter is not None:
+                                    try:
+                                        pdf_result = self.pdf_converter(
+                                            local_path, self.log
+                                        )
+                                        self.log(
+                                            f"PDF saved: {pdf_result.output_pdf_path} "
+                                            f"({pdf_result.pdf_size_bytes} bytes)"
+                                        )
+                                    except Exception as exc:
+                                        self.log(f"PDF conversion error: {exc}")
                         except Exception as exc:
                             self.log(f"Recorder FTP download error: {exc}")
 

@@ -19,6 +19,7 @@ from test_models import (
     build_test_conditions,
 )
 from test_runner import TestRunner
+from pdf_converter import convert_raw_to_pdf
 
 # 장비명 상수로 선언 (나중에 변경 쉽게)
 POWER_SUPPLY = "Power Supply"
@@ -424,6 +425,7 @@ class PowerAnalyzerGUI:
             power_meter=self.devices[POWER_METER].driver,
             output_folder=self.save_folder,
             log_callback=self.log,
+            pdf_converter=convert_raw_to_pdf,
         )
 
         def execute_test():
