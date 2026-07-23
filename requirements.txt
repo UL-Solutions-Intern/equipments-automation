@@ -1,0 +1,8 @@
+pyvisa
+pyserial
+pywinauto
+pywin32
+pyautogui
+
+# Optional: validates the generated PDF structure and page count.
+# pypdf
