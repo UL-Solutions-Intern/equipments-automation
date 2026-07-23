@@ -1,0 +1,11 @@
+2026-07-23 13:35:36,343 | ERROR | AB cursor 30min adjustment failed: not adjusted
+2026-07-23 13:35:36,397 | INFO | AB cursor 30min adjustment completed
+2026-07-23 13:35:36,421 | INFO | cursor value window found | rectangle=(400, 200, 700, 500)
+2026-07-23 13:35:36,421 | INFO | clipboard copied
+2026-07-23 13:35:36,421 | INFO | absolute time difference: 00:30:31.000
+2026-07-23 13:35:36,421 | INFO | difference seconds: 1831
+2026-07-23 13:35:36,428 | ERROR | 커서값 차이 읽기 실패: 커서값 창을 찾지 못했습니다.
+2026-07-23 13:35:36,451 | INFO | AB cursor drag test completed
+2026-07-23 13:35:36,451 | INFO | absolute time difference: 00:29:55.000
+2026-07-23 13:35:36,452 | INFO | difference seconds: 1795
+2026-07-23 13:35:36,763 | ERROR | 입력 검증 실패: unsupported

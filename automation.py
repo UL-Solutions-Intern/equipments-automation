@@ -492,17 +492,15 @@ class PowerAnalyzerGUI:
         )
 
         cvcf = self.devices[POWER_SUPPLY].driver
+        voltages = self._parse_float_list(self.voltage_entry.get(), "전압")
+        frequencies = (
+            self._parse_float_list(self.frequency_entry.get(), "주파수")
+            if electrical_mode == ElectricalMode.AC
+            else []
+        )
         if cvcf is None:
-            voltages = []
-            frequencies = []
             current_limit = None
         else:
-            voltages = self._parse_float_list(self.voltage_entry.get(), "전압")
-            frequencies = (
-                self._parse_float_list(self.frequency_entry.get(), "주파수")
-                if electrical_mode == ElectricalMode.AC
-                else []
-            )
             current_limit = self._parse_optional_float(
                 self.current_entry.get(), "전류 제한"
             )
