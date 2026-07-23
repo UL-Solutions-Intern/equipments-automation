@@ -1,58 +1,30 @@
-# Python cache and compiled files
+# Python cache and test artifacts
 __pycache__/
 *.py[cod]
-*$py.class
+.pytest_cache/
+.test_tmp/
 
 # Virtual environments
 .venv/
 venv/
 env/
 
-# Local environment variables
-.env
-.env.*
-!.env.example
+# Runtime logs
+logs/
+*.log
 
-# Test and analysis caches
-.pytest_cache/
-.coverage
-coverage.xml
-htmlcov/
-.mypy_cache/
-.ruff_cache/
+# Generated Universal Viewer work/output folders
+input/
+output/
 
-# Editors and operating systems
-.vscode/
-.idea/
+# Generated test data and reports
+*.[dD][aA][eE]
+*.[gG][eE][vV]
+*.csv
+*.pdf
+*.part
+
+# OS and IDE metadata
 .DS_Store
 Thumbs.db
-desktop.ini
-
-# Runtime input, output, and logs
-input/*
-!input/.gitkeep
-output/*
-!output/.gitkeep
-logs/*
-!logs/.gitkeep
-*.log
-processing_results.csv
-
-# Recorder raw data and generated documents
-*.DAE
-*.dae
-*.GEV
-*.gev
-*.pdf
-*.PDF
-*.part
-*.tmp
-
-# Build and packaging output
-build/
-dist/
-*.egg-info/
-
-# Local calibration and UI inspection results
-*_inspection_*.txt
-*_preview_*.txt
+.idea/
