@@ -1,0 +1,30 @@
+# Python cache and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.test_tmp/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Runtime logs
+logs/
+*.log
+
+# Generated Universal Viewer work/output folders
+input/
+output/
+
+# Generated test data and reports
+*.[dD][aA][eE]
+*.[gG][eE][vV]
+*.csv
+*.pdf
+*.part
+
+# OS and IDE metadata
+.DS_Store
+Thumbs.db
+.idea/

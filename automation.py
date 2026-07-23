@@ -5,7 +5,6 @@ import serial
 import socket
 import threading
 import time
-import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -20,6 +19,7 @@ from test_models import (
 )
 from test_runner import TestRunner
 from pdf_converter import convert_raw_to_pdf
+from result_folders import create_unique_test_folder, default_results_root
 
 # 장비명 상수로 선언 (나중에 변경 쉽게)
 POWER_SUPPLY = "Power Supply"
@@ -55,8 +55,9 @@ class PowerAnalyzerGUI:
         # VISA Resource Manager 생성
         self.rm = pyvisa.ResourceManager()
 
-        # 기본 저장 폴더 = 현재 경로
-        self.save_folder = os.getcwd()
+        # 기본 저장 루트 = 바탕화면/하이브리드레코더 pdf
+        self.save_root_folder = str(default_results_root())
+        self.save_folder = self.save_root_folder
 
         # UI 빌드
         self.build_gui()
@@ -246,12 +247,13 @@ class PowerAnalyzerGUI:
     def select_folder(self):
         """결과 저장 폴더 지정"""
         folder_selected = filedialog.askdirectory(
-            initialdir=self.save_folder, title="저장 폴더 선택"
+            initialdir=self.save_root_folder, title="저장 폴더 선택"
         )
         if folder_selected:
+            self.save_root_folder = folder_selected
             self.save_folder = folder_selected
             self.folder_label.config(text=f"저장 폴더: {self.save_folder}")
-            self.log(f"저장 폴더가 '{self.save_folder}'(으)로 설정되었습니다.")
+            self.log(f"저장 기본 폴더가 '{self.save_folder}'(으)로 설정되었습니다.")
         else:
             self.log("폴더 지정이 취소되었습니다.")
 
@@ -416,6 +418,20 @@ class PowerAnalyzerGUI:
             self.log(f"시험 시작 오류: {exc}")
             messagebox.showerror("시험 시작 오류", str(exc))
             return
+
+        try:
+            test_output_folder = create_unique_test_folder(self.save_root_folder)
+        except OSError as exc:
+            self.log(f"시험 결과 폴더 생성 오류: {exc}")
+            messagebox.showerror(
+                "시험 시작 오류",
+                f"시험 결과 폴더를 만들 수 없습니다.\n{exc}",
+            )
+            return
+
+        self.save_folder = str(test_output_folder)
+        self.folder_label.config(text=f"저장 폴더: {self.save_folder}")
+        self.log(f"시험 결과 폴더 생성 완료: {self.save_folder}")
 
         self.stop_event.clear()
         self.is_testing = True
