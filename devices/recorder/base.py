@@ -74,12 +74,19 @@ class BaseRecorder(ABC):
         return self._ftp_client().list_file_names()
 
     def download_recording_file(
-        self, output_folder, previous_files: set[str] | None = None
+        self,
+        output_folder,
+        previous_files: set[str] | None = None,
+        local_filename_stem: str | None = None,
     ):
         """Download the newly created recorder data file to the output folder."""
         if not self.FTP_EXTENSION:
             return None
-        return self._ftp_client().download_latest(output_folder, previous_files)
+        return self._ftp_client().download_latest(
+            output_folder,
+            previous_files,
+            local_filename_stem=local_filename_stem,
+        )
 
     def _ftp_client(self) -> RecorderFTPClient:
         host = self.transport.peer_host

@@ -7,7 +7,9 @@ from pathlib import Path
 import time
 
 from test_models import (
+    build_recording_filename_stem,
     ElectricalMode,
+    format_elapsed_time,
     PowerMeasurement,
     TestPlan,
     sanitize_filename,
@@ -80,6 +82,8 @@ class TestRunner:
 
     def run(self, plan: TestPlan, stop_event):
         csv_file = None
+        run_started_at = datetime.now()
+        total_condition_elapsed_seconds = 0.0
         try:
             if self.power_meter is not None:
                 self.power_meter.initialize()
@@ -97,6 +101,7 @@ class TestRunner:
                 recorder_started = False
                 cvcf_output_enabled = False
                 recorder_files_before = None
+                condition_started_at = None
 
                 try:
                     if self.cvcf is not None:
@@ -111,6 +116,7 @@ class TestRunner:
                                 plan.electrical_mode.value,
                             )
                         cvcf_output_enabled = True
+                        condition_started_at = time.monotonic()
                         self.cvcf.output_on()
 
                     try:
@@ -118,6 +124,8 @@ class TestRunner:
                     except Exception as exc:
                         self.log(f"Recorder FTP 파일 목록 확인 오류: {exc}")
 
+                    if condition_started_at is None:
+                        condition_started_at = time.monotonic()
                     recorder_started = True
                     self.recorder.recording_start()
 
@@ -221,11 +229,26 @@ class TestRunner:
                         except Exception as exc:
                             self.log(f"CVCF 출력 OFF 오류: {exc}")
 
+                    condition_elapsed_seconds = (
+                        time.monotonic() - condition_started_at
+                        if condition_started_at is not None
+                        else 0.0
+                    )
+                    total_condition_elapsed_seconds += condition_elapsed_seconds
+
+                    local_filename_stem = build_recording_filename_stem(
+                        plan.test_name,
+                        plan.electrical_mode,
+                        condition,
+                        condition_elapsed_seconds,
+                    )
+
                     if recorder_started:
                         try:
                             result = self.recorder.download_recording_file(
                                 self.output_folder,
                                 recorder_files_before,
+                                local_filename_stem,
                             )
                             if result is not None:
                                 remote_name, local_path, size = result
@@ -243,13 +266,19 @@ class TestRunner:
                     if stop_event.wait(plan.cooldown_seconds):
                         break
 
-            self.log("시험 실행 종료")
         except Exception as exc:
             self.log(f"시험 실행 오류: {exc}")
         finally:
             if csv_file is not None:
                 csv_file.close()
                 self.log("CSV 저장 완료")
+            run_ended_at = datetime.now()
+            self.log(f"시험 시작 시간: {run_started_at:%Y-%m-%d %H:%M:%S}")
+            self.log(f"시험 종료 시간: {run_ended_at:%Y-%m-%d %H:%M:%S}")
+            self.log(
+                f"전체 시험시간: {format_elapsed_time(total_condition_elapsed_seconds)}"
+            )
+            self.log("시험 실행 종료")
 
     def _read_power(self, electrical_mode):
         if self.power_meter is None:
@@ -267,10 +296,20 @@ class TestRunner:
 
     def _open_result_file(self, plan):
         self.output_folder.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        test_date = datetime.now().strftime("%Y%m%d")
         file_path = (
-            self.output_folder / f"{sanitize_filename(plan.test_name)}_{timestamp}.csv"
+            self.output_folder / f"{sanitize_filename(plan.test_name)}_{test_date}.csv"
         )
+        if file_path.exists():
+            duplicate_no = 2
+            while True:
+                candidate = file_path.with_name(
+                    f"{file_path.stem} ({duplicate_no}){file_path.suffix}"
+                )
+                if not candidate.exists():
+                    file_path = candidate
+                    break
+                duplicate_no += 1
         csv_file = file_path.open("w", newline="", encoding="utf-8-sig")
         writer = csv.writer(csv_file)
         writer.writerow(

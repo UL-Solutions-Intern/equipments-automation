@@ -81,9 +81,6 @@ def build_test_conditions(
     frequencies: list[float],
 ) -> list[TestCondition]:
     """입력된 전압·주파수 조합을 공통 시험 조건으로 변환한다."""
-    if not has_cvcf:
-        return [TestCondition()]
-
     if electrical_mode == ElectricalMode.DC:
         return [TestCondition(voltage=voltage) for voltage in (voltages or [None])]
 
@@ -105,3 +102,36 @@ def sanitize_filename(name: str) -> str:
     cleaned = re.sub(r"\s+", "_", cleaned).strip(" ._")
     cleaned = re.sub(r"_+", "_", cleaned)
     return cleaned or "Test"
+
+
+def format_elapsed_time(elapsed_seconds: float) -> str:
+    """Format a measured condition duration for use in a filename."""
+    total_seconds = max(0, int(elapsed_seconds))
+    if total_seconds < 60:
+        return f"({total_seconds}s)"
+
+    total_minutes = total_seconds // 60
+    hours, minutes = divmod(total_minutes, 60)
+    if hours == 0:
+        return f"({minutes}m)"
+    return f"({hours}h {minutes}m)"
+
+
+def build_recording_filename_stem(
+    test_name: str,
+    electrical_mode: ElectricalMode,
+    condition: TestCondition,
+    elapsed_seconds: float,
+) -> str:
+    """Build the local raw-data filename without the recorder extension."""
+    parts = []
+    if condition.voltage is not None:
+        parts.append(f"{condition.voltage:g}V{electrical_mode.value.lower()}")
+    else:
+        parts.append(electrical_mode.value)
+
+    if electrical_mode == ElectricalMode.AC and condition.frequency is not None:
+        parts.append(f"{condition.frequency:g}Hz")
+
+    parts.extend([sanitize_filename(test_name), format_elapsed_time(elapsed_seconds)])
+    return "_".join(parts)

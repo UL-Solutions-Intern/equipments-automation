@@ -149,6 +149,7 @@ class RecorderFTPClient:
         previous_files: set[str] | None = None,
         wait_seconds: float = 20.0,
         poll_interval: float = 2.0,
+        local_filename_stem: str | None = None,
     ) -> tuple[str, Path, int]:
         folder = Path(output_folder)
         folder.mkdir(parents=True, exist_ok=True)
@@ -181,10 +182,30 @@ class RecorderFTPClient:
             self.log(f"FTP raw entry: {raw_entry}")
             self.log(f"FTP download filename: {filename}")
 
-            number = self.next_number(folder)
             suffix = self.config.extension.upper()
-            final_path = folder / f"{number:03d}_{self.config.device_key}{suffix}"
-            part_path = folder / f"{number:03d}_{self.config.device_key}{suffix}.part"
+            if local_filename_stem:
+                final_path = folder / f"{local_filename_stem}{suffix}"
+            else:
+                number = self.next_number(folder)
+                final_path = folder / f"{number:03d}_{self.config.device_key}{suffix}"
+
+            def stem_in_use(stem: str) -> bool:
+                return any(
+                    path.is_file() and path.stem.casefold() == stem.casefold()
+                    for path in folder.iterdir()
+                )
+
+            if stem_in_use(final_path.stem):
+                base_stem = final_path.stem
+                duplicate_no = 2
+                while True:
+                    candidate = folder / f"{base_stem} ({duplicate_no}){suffix}"
+                    if not stem_in_use(candidate.stem):
+                        final_path = candidate
+                        break
+                    duplicate_no += 1
+
+            part_path = final_path.with_name(final_path.name + ".part")
 
             size = self.download_with_fallback(ftp, filename, part_path)
             part_path.replace(final_path)
