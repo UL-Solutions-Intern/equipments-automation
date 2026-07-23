@@ -1,0 +1,58 @@
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local environment variables
+.env
+.env.*
+!.env.example
+
+# Test and analysis caches
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Runtime input, output, and logs
+input/*
+!input/.gitkeep
+output/*
+!output/.gitkeep
+logs/*
+!logs/.gitkeep
+*.log
+processing_results.csv
+
+# Recorder raw data and generated documents
+*.DAE
+*.dae
+*.GEV
+*.gev
+*.pdf
+*.PDF
+*.part
+*.tmp
+
+# Build and packaging output
+build/
+dist/
+*.egg-info/
+
+# Local calibration and UI inspection results
+*_inspection_*.txt
+*_preview_*.txt
