@@ -175,8 +175,7 @@ class TestRunner:
                         now = time.monotonic()
                         tracker.add_sample(now, temperatures)
                         should_check_saturation = (
-                            plan.saturation_enabled
-                            and now >= next_saturation_check_at
+                            plan.saturation_enabled and now >= next_saturation_check_at
                         )
                         if should_check_saturation:
                             if tracker.is_stable(now, started_at):
@@ -185,9 +184,7 @@ class TestRunner:
                                 )
                                 stable = True
                                 break
-                            next_saturation_check_at = (
-                                now + saturation_recheck_seconds
-                            )
+                            next_saturation_check_at = now + saturation_recheck_seconds
                             if now - started_at >= saturation_check_seconds:
                                 self.log(
                                     f"[포화 미도달] CSV 기록은 계속 유지, {saturation_recheck_seconds:g}초 후 재판정"
