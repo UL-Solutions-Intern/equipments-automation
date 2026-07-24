@@ -33,7 +33,7 @@ class FakeRecorder:
     def get_temperature_values(self, _first, _last):
         return {"0001": 25.0}
 
-    def download_recording_file(self, _folder, previous_files):
+    def download_recording_file(self, _folder, previous_files, _local_filename_stem):
         assert previous_files == {"previous.DAE"}
         return "result.DAE", self.raw_path, 123
 
@@ -46,6 +46,7 @@ class PdfIntegrationTests(TestCase):
     def test_converter_runs_complete_manual_pdf_workflow(self):
         raw_path = Path(self.temp_directory.name) / "result.DAE"
         raw_path.write_bytes(b"raw")
+        events = []
         pdf_result = SimpleNamespace(
             output_pdf_path=raw_path.with_suffix(".pdf"),
             pdf_size_bytes=456,
@@ -54,11 +55,24 @@ class PdfIntegrationTests(TestCase):
 
         with patch(
             "pdf_converter.run_manual_pdf_workflow",
-            return_value=workflow_result,
+            side_effect=lambda *_args, **_kwargs: events.append("workflow") or workflow_result,
         ) as run_workflow:
-            result = convert_raw_to_pdf(raw_path, lambda _message: None)
+            with patch(
+                "pdf_converter.close_universal_viewer_instances",
+                side_effect=lambda *_args, **kwargs: events.append(f"close:{kwargs['reason']}"),
+            ) as close_viewer:
+                result = convert_raw_to_pdf(raw_path, lambda _message: None)
 
         self.assertIs(result, pdf_result)
+        self.assertEqual(
+            events,
+            [
+                "close:before opening next raw data",
+                "workflow",
+                "close:after PDF workflow",
+            ],
+        )
+        self.assertEqual(close_viewer.call_count, 2)
         run_workflow.assert_called_once()
         args, kwargs = run_workflow.call_args
         self.assertEqual(args[0], raw_path.resolve())
