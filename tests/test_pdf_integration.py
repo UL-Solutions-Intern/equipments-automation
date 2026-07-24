@@ -4,7 +4,8 @@ from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import patch
 
-from pdf_converter import convert_raw_to_pdf
+from pdf_converter import accept_universal_viewer_save_prompt, convert_raw_to_pdf
+from integrations.universal_viewer.viewer_discovery import WindowInfo
 from test_models import ElectricalMode, TestCondition, TestPlan
 from test_runner import TestRunner
 
@@ -36,6 +37,46 @@ class FakeRecorder:
     def download_recording_file(self, _folder, previous_files, _local_filename_stem):
         assert previous_files == {"previous.DAE"}
         return "result.DAE", self.raw_path, 123
+
+
+class FakeDialogWrapper:
+    def __init__(
+        self,
+        text,
+        class_name,
+        pid,
+        *,
+        children=(),
+        clicks=None,
+    ):
+        self.text = text
+        self.class_name_value = class_name
+        self.pid = pid
+        self.children = tuple(children)
+        self.clicks = clicks if clicks is not None else []
+
+    def window_text(self):
+        return self.text
+
+    def class_name(self):
+        return self.class_name_value
+
+    def process_id(self):
+        return self.pid
+
+    def descendants(self):
+        return self.children
+
+    def click_input(self):
+        self.clicks.append(self.text)
+
+
+class FakeDesktop:
+    def __init__(self, windows):
+        self._windows = tuple(windows)
+
+    def windows(self):
+        return self._windows
 
 
 class PdfIntegrationTests(TestCase):
@@ -77,6 +118,38 @@ class PdfIntegrationTests(TestCase):
         args, kwargs = run_workflow.call_args
         self.assertEqual(args[0], raw_path.resolve())
         self.assertEqual(kwargs["explicit_output_pdf"], raw_path.with_suffix(".pdf").resolve())
+
+    def test_save_changes_prompt_is_accepted_when_universal_viewer_closes(self):
+        clicks = []
+        yes_button = FakeDialogWrapper("예(&Y)", "Button", 1111, clicks=clicks)
+        prompt = FakeDialogWrapper(
+            "Universal Viewer",
+            "#32770",
+            1111,
+            children=(
+                FakeDialogWrapper("변경사항을 저장하시겠습니까?", "Static", 1111),
+                yes_button,
+                FakeDialogWrapper("아니오(&N)", "Button", 1111),
+            ),
+        )
+        viewer_window = WindowInfo(
+            title="Universal Viewer",
+            pid=1111,
+            window_class="Universal_Viewer R3.12.01",
+            backend="win32",
+            handle=100,
+            main_window=True,
+        )
+
+        accepted = accept_universal_viewer_save_prompt(
+            viewer_window,
+            SimpleNamespace(info=lambda *_args, **_kwargs: None, warning=lambda *_args, **_kwargs: None),
+            desktop_factory=lambda _backend: FakeDesktop((prompt,)),
+            sleep_fn=lambda _seconds: None,
+        )
+
+        self.assertTrue(accepted)
+        self.assertEqual(clicks, ["예(&Y)"])
 
     def test_downloaded_recorder_file_is_converted_to_pdf(self):
         raw_path = Path("result.DAE")
