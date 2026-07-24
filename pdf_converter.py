@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 from typing import Callable
 
@@ -13,6 +14,7 @@ from integrations.universal_viewer.pdf_printing import (
     make_unique_pdf_path,
     print_raw_file_to_pdf,
 )
+from integrations.universal_viewer.viewer_discovery import WindowInfo, inspect_windows
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -34,6 +36,7 @@ def convert_raw_to_pdf(
     """Apply the complete Viewer report workflow and print a unique PDF."""
     source = Path(raw_path).expanduser().resolve()
     output_pdf = make_unique_pdf_path(source.with_suffix(".pdf"))
+    config = AppConfig(project_root=PROJECT_ROOT)
 
     logger = logging.getLogger(f"equipment_automation.pdf.{id(log_callback)}")
     logger.setLevel(logging.INFO)
@@ -49,11 +52,81 @@ def convert_raw_to_pdf(
         kwargs["archive_copy_fn"] = lambda _pdf_path: None
         return print_raw_file_to_pdf(*args, **kwargs)
 
-    workflow_result = run_manual_pdf_workflow(
-        source,
-        AppConfig(project_root=PROJECT_ROOT),
-        logger,
-        explicit_output_pdf=output_pdf,
-        print_pdf_fn=print_without_archive_copy,
+    close_universal_viewer_instances(config, logger, reason="before opening next raw data")
+    try:
+        workflow_result = run_manual_pdf_workflow(
+            source,
+            config,
+            logger,
+            explicit_output_pdf=output_pdf,
+            print_pdf_fn=print_without_archive_copy,
+        )
+        return workflow_result.pdf_result
+    finally:
+        close_universal_viewer_instances(config, logger, reason="after PDF workflow")
+
+
+def close_universal_viewer_instances(
+    config: AppConfig,
+    logger: logging.Logger,
+    *,
+    reason: str,
+    timeout_seconds: float = 10.0,
+    poll_interval_seconds: float = 0.5,
+) -> None:
+    """Close current Universal Viewer main windows so each raw file starts fresh."""
+    try:
+        inspection = inspect_windows(logger, config.universal_viewer)
+    except Exception as exc:
+        logger.warning("Universal Viewer close skipped (%s): window inspection failed: %s", reason, exc)
+        return
+
+    targets = inspection.automation_targets
+    if not targets:
+        logger.info("Universal Viewer close skipped (%s): no running main window", reason)
+        return
+
+    logger.info("Universal Viewer close started (%s) | count=%s", reason, len(targets))
+    for window in targets:
+        close_universal_viewer_window(window, logger)
+
+    deadline = time.monotonic() + timeout_seconds
+    remaining = targets
+    while time.monotonic() < deadline:
+        time.sleep(poll_interval_seconds)
+        try:
+            remaining = inspect_windows(logger, config.universal_viewer).automation_targets
+        except Exception as exc:
+            logger.warning("Universal Viewer close wait stopped (%s): %s", reason, exc)
+            return
+        if not remaining:
+            logger.info("Universal Viewer close completed (%s)", reason)
+            return
+
+    logger.warning(
+        "Universal Viewer close timed out (%s) | remaining=%s",
+        reason,
+        ", ".join(_format_window(window) for window in remaining),
     )
-    return workflow_result.pdf_result
+
+
+def close_universal_viewer_window(window: WindowInfo, logger: logging.Logger) -> None:
+    """Send a normal close request to one Universal Viewer window."""
+    if window.handle is None:
+        logger.warning("Universal Viewer close skipped: window handle is unknown | %s", _format_window(window))
+        return
+
+    try:
+        from pywinauto import Desktop
+
+        Desktop(backend=window.backend).window(handle=window.handle).close()
+        logger.info("Universal Viewer close requested | %s", _format_window(window))
+    except Exception as exc:
+        logger.warning("Universal Viewer close request failed | %s | %s", _format_window(window), exc)
+
+
+def _format_window(window: WindowInfo) -> str:
+    return (
+        f"title={window.title!r}, pid={window.pid}, "
+        f"class={window.window_class!r}, handle={window.handle}"
+    )
