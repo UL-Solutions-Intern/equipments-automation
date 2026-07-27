@@ -51,6 +51,8 @@ class PowerAnalyzerGUI:
         self.test_thread = None
         self.stop_event = threading.Event()
         self.test_runner = None
+        self.log_popup = None
+        self.popup_log_box = None
 
         # VISA Resource Manager 생성
         self.rm = pyvisa.ResourceManager()
@@ -64,21 +66,209 @@ class PowerAnalyzerGUI:
 
     def build_gui(self):
         """Tkinter UI 구성"""
-        # 프레임 구성
-        top_frame = tk.Frame(self.root)  # 장비 주소 입력
-        top_frame.pack(pady=10)
+        scroll_container = tk.Frame(self.root)
+        scroll_container.pack(fill="both", expand=True)
 
-        setting_frame = tk.Frame(self.root)  # 테스트 설정 입력
-        setting_frame.pack(pady=5)
+        canvas = tk.Canvas(
+            scroll_container,
+            width=650,
+            height=650,
+            highlightthickness=0,
+        )
+        vertical_scrollbar = ttk.Scrollbar(
+            scroll_container,
+            orient="vertical",
+            command=canvas.yview,
+        )
+        horizontal_scrollbar = ttk.Scrollbar(
+            scroll_container,
+            orient="horizontal",
+            command=canvas.xview,
+        )
+        canvas.configure(
+            yscrollcommand=vertical_scrollbar.set,
+            xscrollcommand=horizontal_scrollbar.set,
+        )
 
-        control_frame = tk.Frame(self.root)  # 제어 버튼
-        control_frame.pack(pady=10)
+        vertical_scrollbar.pack(side="right", fill="y")
+        horizontal_scrollbar.pack(side="bottom", fill="x")
+        canvas.pack(side="left", fill="both", expand=True)
 
-        output_frame = tk.Frame(self.root)  # 측정값 표시
-        output_frame.pack(pady=6)
+        main_frame = tk.Frame(canvas, padx=24, pady=14)
+        main_window = canvas.create_window(
+            (0, 0),
+            window=main_frame,
+            anchor="n",
+        )
 
-        log_frame = tk.Frame(self.root)  # 로그 출력
-        log_frame.pack(pady=10)
+        def update_scroll_region(_event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def fit_content_width(event=None):
+            viewport_width = event.width if event is not None else canvas.winfo_width()
+            if hasattr(self, "_setting_groups"):
+                settings_gap = max(
+                    2,
+                    min(18, int((viewport_width - 620) / 15)),
+                )
+                if getattr(self, "_settings_gap", None) != settings_gap:
+                    self._settings_gap = settings_gap
+                    for index, group in enumerate(self._setting_groups):
+                        group.grid(
+                            row=0,
+                            column=index,
+                            padx=settings_gap,
+                            pady=0,
+                            sticky="n",
+                        )
+                    main_frame.update_idletasks()
+            content_width = max(main_frame.winfo_reqwidth(), viewport_width)
+            if hasattr(self, "log_frame"):
+                self.log_frame.configure(width=max(120, viewport_width - 48))
+            canvas.coords(main_window, content_width / 2, 0)
+            canvas.itemconfigure(main_window, width=content_width)
+            update_scroll_region()
+            if content_width > viewport_width:
+                centered_left = (content_width - viewport_width) / 2
+                canvas.xview_moveto(centered_left / content_width)
+            else:
+                canvas.xview_moveto(0)
+
+        def scroll_with_mouse_wheel(event):
+            canvas.yview_scroll(-1 * int(event.delta / 120), "units")
+
+        def scroll_horizontally_with_mouse_wheel(event):
+            canvas.xview_scroll(-1 * int(event.delta / 120), "units")
+
+        def attach_tooltip(widget, message):
+            def show_tooltip(_event=None):
+                if getattr(widget, "_tooltip_window", None) is not None:
+                    return
+                tooltip = tk.Toplevel(widget)
+                tooltip.wm_overrideredirect(True)
+                x = widget.winfo_rootx() + widget.winfo_width() + 6
+                y = widget.winfo_rooty()
+                tooltip.wm_geometry(f"+{x}+{y}")
+                tk.Label(
+                    tooltip,
+                    text=message or " ",
+                    anchor="nw",
+                    justify="left",
+                    wraplength=360,
+                    font=("맑은 고딕", 8),
+                    background="#fffde7",
+                    relief="solid",
+                    borderwidth=1,
+                    padx=8,
+                    pady=6,
+                ).pack()
+                widget._tooltip_window = tooltip
+
+            def hide_tooltip(_event=None):
+                tooltip = getattr(widget, "_tooltip_window", None)
+                if tooltip is not None:
+                    tooltip.destroy()
+                    widget._tooltip_window = None
+
+            widget.bind("<Enter>", show_tooltip)
+            widget.bind("<Leave>", hide_tooltip)
+
+        def create_help_button(parent, message):
+            button = tk.Button(
+                parent,
+                text="?",
+                width=1,
+                font=("맑은 고딕", 8, "bold"),
+                padx=1,
+                pady=0,
+            )
+            attach_tooltip(button, message)
+            return button
+
+        main_frame.bind("<Configure>", update_scroll_region)
+        canvas.bind("<Configure>", fit_content_width)
+        self.root.bind_all("<MouseWheel>", scroll_with_mouse_wheel)
+        self.root.bind_all("<Shift-MouseWheel>", scroll_horizontally_with_mouse_wheel)
+
+        top_frame = tk.Frame(main_frame)  # 장비 주소 입력
+        top_frame.pack(anchor="center", pady=(0, 14))
+
+        setting_frame = tk.Frame(main_frame)  # 테스트 설정 입력
+        setting_frame.pack(fill="x", pady=(0, 12))
+        left_settings = tk.Frame(setting_frame)
+        center_settings = tk.Frame(setting_frame)
+        right_settings = tk.Frame(setting_frame)
+        left_settings.grid(row=0, column=0, padx=18, sticky="n")
+        center_settings.grid(row=0, column=1, padx=18, sticky="n")
+        right_settings.grid(row=0, column=2, padx=18, sticky="n")
+        for column in range(3):
+            setting_frame.grid_columnconfigure(column, weight=1)
+        self._setting_groups = (left_settings, center_settings, right_settings)
+
+        self.overload_enabled_var = tk.BooleanVar(value=True)
+        overload_header = tk.Frame(main_frame)
+        tk.Label(
+            overload_header,
+            text="OverLoad 설정",
+            fg="black",
+            font=("맑은 고딕", 9, "bold"),
+        ).pack(side="left")
+        self.overload_check = tk.Checkbutton(
+            overload_header,
+            text="OverLoad 테스트 수행",
+            variable=self.overload_enabled_var,
+            fg="black",
+            command=self._toggle_overload_controls,
+        )
+        self.overload_check.pack(side="left", padx=(14, 0))
+        tk.Label(
+            overload_header,
+            text="오버로드 쉬는 시간 (s):",
+            fg="black",
+        ).pack(side="left", padx=(22, 8))
+        self.overload_rest_entry = tk.Entry(overload_header, width=10)
+        self.overload_rest_entry.pack(side="left")
+        self.overload_rest_entry.insert(0, "1800")
+
+        overload_frame = tk.LabelFrame(
+            main_frame,
+            labelwidget=overload_header,
+            padx=16,
+            pady=10,
+        )
+        overload_frame.pack(anchor="center", pady=(0, 12))
+
+        control_frame = tk.Frame(main_frame)  # 제어 버튼
+        control_frame.pack(fill="x", pady=(2, 12))
+        button_frame = tk.Frame(control_frame)
+        button_frame.pack(anchor="center")
+
+        progress_frame = tk.Frame(main_frame)
+        progress_frame.pack(anchor="center", pady=(0, 10))
+
+        output_frame = tk.Frame(main_frame)
+        output_frame.pack(anchor="center", pady=(0, 10))
+
+        log_header = tk.Frame(main_frame)
+        tk.Label(log_header, text="로그").pack(side="left")
+        tk.Button(
+            log_header,
+            text="크게 보기",
+            command=self.open_log_popup,
+            padx=6,
+            pady=0,
+        ).pack(side="left", padx=(8, 0))
+
+        self.log_frame = tk.LabelFrame(
+            main_frame,
+            labelwidget=log_header,
+            width=850,
+            height=220,
+            padx=8,
+            pady=8,
+        )
+        self.log_frame.pack(anchor="center", pady=(0, 4))
+        self.log_frame.pack_propagate(False)
 
         # 장비 주소 입력 필드
         self.device_entries = {}
@@ -89,9 +279,18 @@ class PowerAnalyzerGUI:
             tk.Label(top_frame, text=label).grid(
                 row=row, column=0, sticky="e", pady=(2, 2)
             )
-            entry = tk.Entry(top_frame, width=40)
-            entry.grid(row=row, column=1, columnspan=3, padx=5, pady=(2, 2))
+            entry = tk.Entry(top_frame, width=48)
+            entry.grid(
+                row=row,
+                column=1,
+                columnspan=3,
+                sticky="w",
+                padx=8,
+                pady=(3, 3),
+            )
             self.device_entries[label] = entry
+
+        top_frame.grid_columnconfigure(1, weight=0)
 
         # 장비 연결 버튼
         self.connect_btn = tk.Button(
@@ -106,88 +305,147 @@ class PowerAnalyzerGUI:
         self.disconnect_btn.grid(row=2, column=4, sticky="w", padx=(6, 2), pady=2)
 
         # 시험명 입력 필드
-        tk.Label(setting_frame, text="시험명:").grid(row=0, column=0, sticky="e")
+        tk.Label(left_settings, text="시험명:").grid(row=0, column=0, sticky="e")
         self.test_name_combo = ttk.Combobox(
-            setting_frame,
+            left_settings,
             values=["Normal", "Abnormal", "Fault"],
             state="normal",
-            width=18,
+            width=10,
         )
-        self.test_name_combo.grid(row=0, column=1)
+        self.test_name_combo.grid(row=0, column=1, padx=(8, 0), pady=3)
         self.test_name_combo.set("Normal")
 
         # AC/DC 선택 콤보박스
-        tk.Label(setting_frame, text="출력 모드:").grid(row=2, column=2, sticky="e")
+        tk.Label(center_settings, text="출력 모드:").grid(
+            row=2, column=0, sticky="e"
+        )
         self.electrical_mode_combo = ttk.Combobox(
-            setting_frame,
+            center_settings,
             values=[ElectricalMode.AC.value, ElectricalMode.DC.value],
             state="readonly",
-            width=8,
+            width=5,
         )
-        self.electrical_mode_combo.grid(row=2, column=3)
+        self.electrical_mode_combo.grid(
+            row=2, column=1, sticky="w", padx=(8, 0), pady=3
+        )
         self.electrical_mode_combo.set(ElectricalMode.AC.value)
         self.electrical_mode_combo.bind(
             "<<ComboboxSelected>>",
             self._on_electrical_mode_changed,
         )
 
-        # 전압 시퀀스 입력. 비워두면 전압 설정을 변경하지 않는다.
-        tk.Label(setting_frame, text="전압 시퀀스 (V):").grid(
+        tk.Label(left_settings, text="전압 시퀀스 (V):").grid(
             row=1, column=0, sticky="e"
         )
-        self.voltage_entry = tk.Entry(setting_frame, width=15)
-        self.voltage_entry.grid(row=1, column=1)
+        self.voltage_entry = tk.Entry(left_settings, width=12)
+        self.voltage_entry.grid(row=1, column=1, padx=(8, 0), pady=3)
         self.voltage_entry.insert(0, "90,264")
 
         # 시험 시간 입력
-        tk.Label(setting_frame, text="시험 시간 (s):").grid(row=0, column=2, sticky="e")
-        self.wait_entry = tk.Entry(setting_frame, width=10)
-        self.wait_entry.grid(row=0, column=3)
+        tk.Label(center_settings, text="시험 시간 (s):").grid(
+            row=0, column=0, sticky="e"
+        )
+        self.wait_entry = tk.Entry(center_settings, width=10)
+        self.wait_entry.grid(row=0, column=1, sticky="w", padx=(8, 0), pady=3)
         self.wait_entry.insert(0, "5400")
 
-        # 샘플링 간격 입력
-        tk.Label(setting_frame, text="샘플링 간격 (s):").grid(
-            row=0, column=4, sticky="e"
-        )
-        self.sampling_entry = tk.Entry(setting_frame, width=10)
-        self.sampling_entry.grid(row=0, column=5)
+        self.sampling_entry = tk.Entry(setting_frame)
         self.sampling_entry.insert(0, "1")
 
-        # 주파수 시퀀스 입력. 비워두면 주파수를 변경하지 않는다.
-        tk.Label(setting_frame, text="주파수 시퀀스 (Hz):").grid(
+        tk.Label(right_settings, text="쉬는 시간 (s):").grid(
+            row=0, column=0, sticky="e"
+        )
+        self.condition_rest_entry = tk.Entry(right_settings, width=10)
+        self.condition_rest_entry.grid(
+            row=0, column=1, sticky="w", padx=(8, 0), pady=3
+        )
+        self.condition_rest_entry.insert(0, "600")
+
+        tk.Label(left_settings, text="주파수 시퀀스 (Hz):").grid(
             row=2, column=0, sticky="e"
         )
-        self.frequency_entry = tk.Entry(setting_frame, width=10)
-        self.frequency_entry.grid(row=2, column=1)
+        self.frequency_entry = tk.Entry(left_settings, width=10)
+        self.frequency_entry.grid(
+            row=2, column=1, sticky="w", padx=(8, 0), pady=3
+        )
         self.frequency_entry.insert(0, "50,60")
 
         # 부하 전류 입력
-        tk.Label(setting_frame, text="부하 전류 (A):").grid(row=1, column=2, sticky="e")
-        self.current_entry = tk.Entry(setting_frame, width=10)
-        self.current_entry.grid(row=1, column=3)
+        tk.Label(center_settings, text="부하 전류 (A):").grid(
+            row=1, column=0, sticky="e"
+        )
+        self.current_entry = tk.Entry(center_settings, width=10)
+        self.current_entry.grid(row=1, column=1, sticky="w", padx=(8, 0), pady=3)
         self.current_entry.insert(0, "11.0")
 
         # HR 채널 범위 입력 (온도 센서)
-        tk.Label(setting_frame, text="HR 채널 (시작,끝):").grid(
-            row=1, column=4, sticky="e"
+        tk.Label(right_settings, text="HR 채널 (시작,끝):").grid(
+            row=1, column=0, sticky="e"
         )
-        self.HR_entry = tk.Entry(setting_frame, width=15)
-        self.HR_entry.grid(row=1, column=5)
+        self.HR_entry = tk.Entry(right_settings, width=10)
+        self.HR_entry.grid(row=1, column=1, padx=(8, 0), pady=3)
         self.HR_entry.insert(0, "0001,0008")
+
+        hr_channel_tooltip_message = "MV2000: 0001~0010,0011~0020\n" \
+        "GP20: 0001~0010, 0101~0110, 0201~0210"
+        self.hr_channel_help_btn = create_help_button(
+            right_settings,
+            hr_channel_tooltip_message,
+        )
+        self.hr_channel_help_btn.grid(row=1, column=2, padx=(8, 0))
+
+        tk.Label(right_settings, text="비교할 시간:").grid(
+            row=2, column=0, sticky="e"
+        )
+        self.compare_time_entry = tk.Entry(right_settings, width=10)
+        self.compare_time_entry.grid(
+            row=2, column=1, sticky="w", padx=(8, 0), pady=3
+        )
+        self.compare_time_entry.insert(0, "1800")
+        compare_time_tooltip_message = "포화상태 체크를 위해\n비교할 시간을 입력해주세요."
+        self.compare_time_help_btn = create_help_button(
+            right_settings,
+            compare_time_tooltip_message,
+        )
+        self.compare_time_help_btn.grid(row=2, column=2, padx=(8, 0), pady=3)
+
+        tk.Label(overload_frame, text="T1 Coil 채널:", fg="black").grid(
+            row=0, column=0, sticky="e", padx=(0, 8)
+        )
+        self.t1_coil_channel_combo = ttk.Combobox(
+            overload_frame,
+            values=[f"{channel:04d}" for channel in range(1, 49)],
+            state="readonly",
+            width=10,
+        )
+        self.t1_coil_channel_combo.grid(row=0, column=1, sticky="w")
+        self.t1_coil_channel_combo.set("0001")
+
+        tk.Label(overload_frame, text="오버로드 대상 시험:", fg="black").grid(
+            row=0, column=2, sticky="e", padx=(28, 8)
+        )
+        self.overload_target_entry = tk.Entry(
+            overload_frame,
+            width=15,
+            disabledforeground="#666666",
+        )
+        self.overload_target_entry.grid(row=0, column=3, sticky="w")
+        self.overload_target_entry.insert(0, "Normal_90V_50Hz")
+        self._toggle_overload_controls()
 
         # 제어 버튼
         self.start_test_btn = tk.Button(
-            control_frame, text="테스트 시작", width=15, command=self.start_test
+            button_frame, text="테스트 시작", width=15, command=self.start_test
         )
         self.start_test_btn.grid(row=0, column=0, padx=10)
 
         self.stop_test_btn = tk.Button(
-            control_frame, text="테스트 중지", width=15, command=self.stop_test
+            button_frame, text="테스트 중지", width=15, command=self.stop_test
         )
         self.stop_test_btn.grid(row=0, column=1, padx=10)
 
         self.folder_btn = tk.Button(
-            control_frame, text="폴더 지정", width=15, command=self.select_folder
+            button_frame, text="폴더 지정", width=15, command=self.select_folder
         )
         self.folder_btn.grid(row=0, column=2, padx=10)
 
@@ -195,24 +453,60 @@ class PowerAnalyzerGUI:
         self.folder_label = tk.Label(
             control_frame, text=f"저장 폴더: {self.save_folder}", anchor="w", fg="blue"
         )
-        self.folder_label.grid(
-            row=1, column=0, columnspan=3, sticky="w", padx=10, pady=(5, 0)
+        self.folder_label.pack(anchor="center", padx=10, pady=(5, 0))
+
+        tk.Label(progress_frame, text="[현재 진행중인 테스트]").grid(
+            row=0, column=0, sticky="w", padx=(0, 16), pady=3
         )
+        tk.Label(progress_frame, text="테스트 이름:").grid(
+            row=0, column=1, sticky="w", padx=(0, 8), pady=3
+        )
+        self.current_test_label = tk.Label(
+            progress_frame,
+            text="대기 중",
+            anchor="w",
+        )
+        self.current_test_label.grid(
+            row=0, column=2, sticky="w", padx=(0, 36), pady=3
+        )
+
+        tk.Label(progress_frame, text="진행 시간:").grid(
+            row=0, column=3, sticky="w", padx=(0, 8), pady=3
+        )
+        self.elapsed_time_label = tk.Label(
+            progress_frame,
+            text="0초",
+            anchor="w",
+        )
+        self.elapsed_time_label.grid(row=0, column=4, sticky="w", pady=3)
 
         # 실시간 측정값 표시
-        self.dl_values_label = tk.Label(
-            output_frame, text="DL 측정값: V=N/A, A=N/A", font=("Arial", 10)
+        tk.Label(output_frame, text="[실시간 측정값]").pack(
+            side="left", anchor="w", padx=(0, 16)
         )
-        self.dl_values_label.pack(anchor="w")
+        self.dl_values_label = tk.Label(
+            output_frame, text="DL 측정값: V=N/A, A=N/A"
+        )
+        self.dl_values_label.pack(side="left", anchor="w")
 
         self.pm_values_label = tk.Label(
-            output_frame, text="PM 측정값: V=N/A, A=N/A, Hz=N/A", font=("Arial", 10)
+            output_frame, text="PM 측정값: V=N/A, A=N/A, Hz=N/A"
         )
-        self.pm_values_label.pack(anchor="w")
+        self.pm_values_label.pack(side="left", anchor="w", padx=(16, 0))
 
         # 로그 출력 박스
-        self.log_box = tk.Text(log_frame, height=15, width=100)
-        self.log_box.pack()
+        log_content = tk.Frame(self.log_frame)
+        log_content.pack(fill="both", expand=True)
+        log_scrollbar = ttk.Scrollbar(log_content, orient="vertical")
+        self.log_box = tk.Text(
+            log_content,
+            height=10,
+            yscrollcommand=log_scrollbar.set,
+        )
+        log_scrollbar.configure(command=self.log_box.yview)
+        log_scrollbar.pack(side="right", fill="y")
+        self.log_box.pack(side="left", fill="both", expand=True)
+        self.root.after_idle(fit_content_width)
 
     def update_measurement_display(
         self, voltage_meas, current_meas, pm_v, pm_a, pm_p, pm_hz
@@ -224,6 +518,16 @@ class PowerAnalyzerGUI:
         self.pm_values_label.config(
             text=f"PM 측정값: V={pm_v}, A={pm_a},P={pm_p}, Hz={pm_hz}"
         )
+
+    def _toggle_overload_controls(self):
+        """OverLoad 수행 여부에 따라 관련 설정 입력을 활성화한다."""
+        enabled = self.overload_enabled_var.get()
+        self.t1_coil_channel_combo.config(
+            state="readonly" if enabled else "disabled"
+        )
+        entry_state = tk.NORMAL if enabled else tk.DISABLED
+        self.overload_rest_entry.config(state=entry_state)
+        self.overload_target_entry.config(state=entry_state)
 
     def _on_electrical_mode_changed(self, _event=None):
         """DC에서는 사용하지 않는 주파수 입력을 비활성화한다."""
@@ -239,10 +543,50 @@ class PowerAnalyzerGUI:
 
         def append_log():
             timestamp = time.strftime("%H:%M:%S")
-            self.log_box.insert(tk.END, f"[{timestamp}] {text}\n")
+            line = f"[{timestamp}] {text}\n"
+            self.log_box.insert(tk.END, line)
             self.log_box.see(tk.END)
+            if (
+                self.popup_log_box is not None
+                and self.popup_log_box.winfo_exists()
+            ):
+                self.popup_log_box.insert(tk.END, line)
+                self.popup_log_box.see(tk.END)
 
         self.root.after(0, append_log)
+
+    def open_log_popup(self):
+        """현재 로그를 크기 조절 가능한 별도 창에서 표시한다."""
+        if self.log_popup is not None and self.log_popup.winfo_exists():
+            self.log_popup.deiconify()
+            self.log_popup.lift()
+            self.log_popup.focus_force()
+            return
+
+        self.log_popup = tk.Toplevel(self.root)
+        self.log_popup.title("통합 테스트 시스템 - 로그")
+        self.log_popup.geometry("900x600")
+        self.log_popup.minsize(450, 300)
+
+        popup_frame = tk.Frame(self.log_popup, padx=8, pady=8)
+        popup_frame.pack(fill="both", expand=True)
+        popup_scrollbar = ttk.Scrollbar(popup_frame, orient="vertical")
+        self.popup_log_box = tk.Text(
+            popup_frame,
+            yscrollcommand=popup_scrollbar.set,
+        )
+        popup_scrollbar.configure(command=self.popup_log_box.yview)
+        popup_scrollbar.pack(side="right", fill="y")
+        self.popup_log_box.pack(side="left", fill="both", expand=True)
+        self.popup_log_box.insert("1.0", self.log_box.get("1.0", tk.END))
+        self.popup_log_box.see(tk.END)
+
+        def close_popup():
+            self.log_popup.destroy()
+            self.log_popup = None
+            self.popup_log_box = None
+
+        self.log_popup.protocol("WM_DELETE_WINDOW", close_popup)
 
     def select_folder(self):
         """결과 저장 폴더 지정"""
@@ -493,8 +837,14 @@ class PowerAnalyzerGUI:
         electrical_mode = ElectricalMode(self.electrical_mode_combo.get())
         duration = float(self.wait_entry.get())
         sample_interval = float(self.sampling_entry.get())
-        if duration <= 0 or sample_interval <= 0:
-            raise ValueError("시험 시간과 샘플링 간격은 0보다 커야 합니다.")
+        comparison_window = float(self.compare_time_entry.get())
+        condition_rest_seconds = float(self.condition_rest_entry.get())
+        if duration <= 0 or sample_interval <= 0 or comparison_window <= 0:
+            raise ValueError(
+                "시험 시간, 샘플링 간격, 비교할 시간은 0보다 커야 합니다."
+            )
+        if condition_rest_seconds < 0:
+            raise ValueError("쉬는 시간은 0 이상이어야 합니다.")
 
         try:
             first_channel, last_channel = [
@@ -533,13 +883,14 @@ class PowerAnalyzerGUI:
             conditions=conditions,
             duration_seconds=duration,
             sample_interval_seconds=sample_interval,
-            cooldown_seconds=1800,
+            cooldown_seconds=condition_rest_seconds,
             first_channel=first_channel,
             last_channel=last_channel,
             temperature_channels=temperature_channels,
             current_limit=current_limit,
-            saturation_check_seconds=5400,
+            saturation_check_seconds=duration,
             saturation_recheck_seconds=600,
+            stabilization_window_seconds=comparison_window,
         )
 
     @staticmethod

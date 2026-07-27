@@ -62,6 +62,7 @@ class TestPlan:
     saturation_enabled: bool = True
     saturation_check_seconds: float | None = None
     saturation_recheck_seconds: float | None = None
+    stabilization_window_seconds: float = 1800
 
 
 @dataclass
