@@ -409,12 +409,25 @@ class PowerAnalyzerGUI:
         )
         self.compare_time_help_btn.grid(row=2, column=2, padx=(8, 0), pady=3)
 
-        tk.Label(overload_frame, text="T1 Coil 채널:", fg="black").grid(
+        tk.Label(overload_frame, text="Coil 채널:", fg="black").grid(
             row=0, column=0, sticky="e", padx=(0, 8)
         )
         self.t1_coil_channel_combo = ttk.Combobox(
             overload_frame,
-            values=[f"{channel:04d}" for channel in range(1, 49)],
+            values=[
+                *[f"{channel:04d}" for channel in range(1, 11)],
+                *[
+                    f"{mv_channel:04d} ({gp_channel:04d})"
+                    for group in range(1, 5)
+                    for mv_channel, gp_channel in zip(
+                        range(group * 10 + 1, min(group * 10 + 11, 49)),
+                        range(
+                            group * 100 + 1,
+                            group * 100 + min(11, 49 - group * 10),
+                        ),
+                    )
+                ],
+            ],
             state="readonly",
             width=10,
         )
