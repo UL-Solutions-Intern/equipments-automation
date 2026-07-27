@@ -17,12 +17,12 @@ from test_models import (
 
 
 class StabilizationTracker:
-    """모든 온도 채널이 30분간 1.5도 미만으로 변했는지 판단한다."""
+    """모든 온도 채널이 설정된 비교 시간 동안 1.5도 미만으로 변했는지 판단한다."""
 
     def __init__(
         self,
         channels,
-        window_seconds=1800,
+        window_seconds,
         max_delta=1.5,
         min_elapsed_seconds=0,
     ):
@@ -144,6 +144,7 @@ class TestRunner:
 
                     tracker = StabilizationTracker(
                         plan.temperature_channels,
+                        window_seconds=plan.stabilization_window_seconds,
                         min_elapsed_seconds=saturation_check_seconds,
                     )
                     started_at = time.monotonic()
