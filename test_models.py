@@ -63,6 +63,10 @@ class TestPlan:
     saturation_check_seconds: float | None = None
     saturation_recheck_seconds: float | None = None
     stabilization_window_seconds: float = 1800
+    overload_enabled: bool = False
+    overload_rest_seconds: float = 0
+    overload_coil_channel: str | None = None
+    overload_coil_display_channel: str | None = None
 
 
 @dataclass
@@ -135,4 +139,20 @@ def build_recording_filename_stem(
         parts.append(f"{condition.frequency:g}Hz")
 
     parts.extend([sanitize_filename(test_name), format_elapsed_time(elapsed_seconds)])
+    return "_".join(parts)
+
+
+def build_overload_target_label(
+    test_name: str,
+    electrical_mode: ElectricalMode,
+    condition: TestCondition,
+) -> str:
+    """Build the UI label for the condition selected as the overload target."""
+    parts = [sanitize_filename(test_name)]
+    if condition.voltage is not None:
+        parts.append(f"{condition.voltage:g}V")
+    if electrical_mode == ElectricalMode.AC and condition.frequency is not None:
+        parts.append(f"{condition.frequency:g}Hz")
+    if len(parts) == 1:
+        parts.append("Current")
     return "_".join(parts)

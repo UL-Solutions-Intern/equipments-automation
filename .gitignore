@@ -32,3 +32,9 @@ Thumbs.db
 __pycache__/
 *.pyc
 *.pyo
+# Python cache
+__pycache__/
+*.py[cod]
+
+# macOS
+.DS_Store

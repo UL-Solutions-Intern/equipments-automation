@@ -205,7 +205,7 @@ class PowerAnalyzerGUI:
             setting_frame.grid_columnconfigure(column, weight=1)
         self._setting_groups = (left_settings, center_settings, right_settings)
 
-        self.overload_enabled_var = tk.BooleanVar(value=True)
+        self.overload_enabled_var = tk.BooleanVar(value=False)
         overload_header = tk.Frame(main_frame)
         tk.Label(
             overload_header,
@@ -443,7 +443,7 @@ class PowerAnalyzerGUI:
             disabledforeground="#666666",
         )
         self.overload_target_entry.grid(row=0, column=3, sticky="w")
-        self.overload_target_entry.insert(0, "Normal_90V_50Hz")
+        self.overload_target_entry.insert(0, "")
         self._toggle_overload_controls()
 
         # 제어 버튼
@@ -540,7 +540,24 @@ class PowerAnalyzerGUI:
         )
         entry_state = tk.NORMAL if enabled else tk.DISABLED
         self.overload_rest_entry.config(state=entry_state)
-        self.overload_target_entry.config(state=entry_state)
+        self.overload_target_entry.config(state=tk.DISABLED)
+        if not enabled:
+            self._set_overload_target_text("")
+
+    def _set_overload_target_text(self, text):
+        """오버로드 대상 시험 표시칸을 사용자 편집 없이 갱신한다."""
+        self.overload_target_entry.config(state=tk.NORMAL)
+        self.overload_target_entry.delete(0, tk.END)
+        self.overload_target_entry.insert(0, text)
+        self.overload_target_entry.config(state=tk.DISABLED)
+
+    def update_overload_target_display(self, text):
+        """TestRunner worker thread에서 계산된 오버로드 대상 시험을 UI에 표시한다."""
+
+        def apply_update():
+            self._set_overload_target_text(text)
+
+        self.root.after(0, apply_update)
 
     def _on_electrical_mode_changed(self, _event=None):
         """DC에서는 사용하지 않는 주파수 입력을 비활성화한다."""
@@ -791,6 +808,7 @@ class PowerAnalyzerGUI:
         self.log(f"시험 결과 폴더 생성 완료: {self.save_folder}")
 
         self.stop_event.clear()
+        self._set_overload_target_text("")
         self.is_testing = True
         self.test_runner = TestRunner(
             recorder=self.devices[RECORDER].driver,
@@ -799,6 +817,7 @@ class PowerAnalyzerGUI:
             output_folder=self.save_folder,
             log_callback=self.log,
             pdf_converter=convert_raw_to_pdf,
+            overload_target_callback=self.update_overload_target_display,
         )
 
         def execute_test():
@@ -852,12 +871,18 @@ class PowerAnalyzerGUI:
         sample_interval = float(self.sampling_entry.get())
         comparison_window = float(self.compare_time_entry.get())
         condition_rest_seconds = float(self.condition_rest_entry.get())
+        overload_enabled = self.overload_enabled_var.get()
+        overload_rest_seconds = (
+            float(self.overload_rest_entry.get()) if overload_enabled else 0
+        )
         if duration <= 0 or sample_interval <= 0 or comparison_window <= 0:
             raise ValueError(
                 "시험 시간, 샘플링 간격, 비교할 시간은 0보다 커야 합니다."
             )
         if condition_rest_seconds < 0:
             raise ValueError("쉬는 시간은 0 이상이어야 합니다.")
+        if overload_rest_seconds < 0:
+            raise ValueError("오버로드 쉬는 시간은 0 이상이어야 합니다.")
 
         try:
             first_channel, last_channel = [
@@ -869,6 +894,21 @@ class PowerAnalyzerGUI:
         temperature_channels = recorder.get_temperature_channels(
             first_channel, last_channel
         )
+        overload_display_channel = None
+        overload_coil_channel = None
+        if overload_enabled:
+            overload_display_channel, overload_coil_channel = (
+                self._resolve_overload_coil_channel(
+                    self.t1_coil_channel_combo.get(),
+                    recorder,
+                )
+            )
+            if overload_coil_channel not in temperature_channels:
+                raise ValueError(
+                    "OverLoad Coil 채널이 HR 채널 범위에 포함되어야 합니다. "
+                    f"선택={overload_display_channel}, "
+                    f"Recorder 기준={overload_coil_channel}"
+                )
 
         cvcf = self.devices[POWER_SUPPLY].driver
         voltages = self._parse_float_list(self.voltage_entry.get(), "전압")
@@ -904,7 +944,32 @@ class PowerAnalyzerGUI:
             saturation_check_seconds=duration,
             saturation_recheck_seconds=600,
             stabilization_window_seconds=comparison_window,
+            overload_enabled=overload_enabled,
+            overload_rest_seconds=overload_rest_seconds,
+            overload_coil_channel=overload_coil_channel,
+            overload_coil_display_channel=overload_display_channel,
         )
+
+    @staticmethod
+    def _resolve_overload_coil_channel(selection, recorder):
+        """UI의 logical coil 채널을 실제 Recorder 응답 key로 변환한다."""
+        text = selection.strip()
+        if not text:
+            raise ValueError("OverLoad Coil 채널을 선택하세요.")
+
+        if "(" in text and ")" in text:
+            display_channel = text.split("(", 1)[0].strip()
+            gp20_channel = text.split("(", 1)[1].split(")", 1)[0].strip()
+        else:
+            display_channel = text
+            gp20_channel = text
+
+        if not display_channel.isdigit() or not gp20_channel.isdigit():
+            raise ValueError(f"OverLoad Coil 채널 형식이 올바르지 않습니다: {selection}")
+
+        recorder_name = getattr(recorder, "name", "").upper()
+        actual_channel = gp20_channel if recorder_name.startswith("GP20") else display_channel
+        return display_channel.zfill(4), actual_channel.zfill(4)
 
     @staticmethod
     def _parse_float_list(text, field_name):
