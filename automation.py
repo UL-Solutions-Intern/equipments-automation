@@ -580,16 +580,23 @@ class PowerAnalyzerGUI:
         def append_log():
             timestamp = time.strftime("%H:%M:%S")
             line = f"[{timestamp}] {text}\n"
-            self.log_box.insert(tk.END, line)
-            self.log_box.see(tk.END)
+            self._append_log_line(self.log_box, line)
             if (
                 self.popup_log_box is not None
                 and self.popup_log_box.winfo_exists()
             ):
-                self.popup_log_box.insert(tk.END, line)
-                self.popup_log_box.see(tk.END)
+                self._append_log_line(self.popup_log_box, line)
 
         self.root.after(0, append_log)
+
+    @staticmethod
+    def _append_log_line(text_widget, line):
+        """맨 아래를 보고 있을 때만 새 로그를 따라가고, 위를 보는 중이면 위치를 유지한다."""
+        _, bottom = text_widget.yview()
+        should_follow_new_log = bottom >= 0.999
+        text_widget.insert(tk.END, line)
+        if should_follow_new_log:
+            text_widget.see(tk.END)
 
     def open_log_popup(self):
         """현재 로그를 크기 조절 가능한 별도 창에서 표시한다."""
