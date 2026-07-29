@@ -90,6 +90,7 @@ class TestRunner:
         log_callback=print,
         pdf_converter=None,
         overload_target_callback=None,
+        progress_callback=None,
     ):
         self.recorder = recorder
         self.cvcf = cvcf
@@ -98,6 +99,7 @@ class TestRunner:
         self.log = log_callback
         self.pdf_converter = pdf_converter
         self.overload_target_callback = overload_target_callback
+        self.progress_callback = progress_callback
 
     def run(self, plan: TestPlan, stop_event):
         csv_file = None
@@ -133,7 +135,11 @@ class TestRunner:
 
                 if index < total_steps and plan.cooldown_seconds > 0:
                     self.log(f"다음 조건 시작 전 {plan.cooldown_seconds:g}초 대기")
-                    if stop_event.wait(plan.cooldown_seconds):
+                    if self._wait_with_progress(
+                        stop_event,
+                        plan.cooldown_seconds,
+                        "다음 조건 대기",
+                    ):
                         break
 
             if csv_file is not None:
@@ -150,7 +156,11 @@ class TestRunner:
                     self.log(
                         f"OverLoad 시작 전 {plan.overload_rest_seconds:g}초 대기"
                     )
-                    if stop_event.wait(plan.overload_rest_seconds):
+                    if self._wait_with_progress(
+                        stop_event,
+                        plan.overload_rest_seconds,
+                        "OverLoad 대기",
+                    ):
                         return
 
                 self._publish_overload_target(overload_candidate.target_label)
@@ -185,6 +195,7 @@ class TestRunner:
                             f"OverLoad_{overload_candidate.target_label}"
                         ),
                         recording_test_name=f"{plan.test_name}_OverLoad",
+                        progress_name=f"OverLoad_{overload_candidate.target_label}",
                     )
                     total_condition_elapsed_seconds += condition_elapsed
                 finally:
@@ -227,12 +238,20 @@ class TestRunner:
         csv_test_name=None,
         csv_condition_label=None,
         recording_test_name=None,
+        progress_name=None,
     ):
         self.log(f"{condition_label} 테스트 시작")
         recorder_started = False
         cvcf_output_enabled = False
         recorder_files_before = None
         condition_started_at = None
+        active_progress_name = progress_name or build_overload_target_label(
+            recording_test_name or plan.test_name,
+            plan.electrical_mode,
+            condition,
+        )
+        progress_started_at = time.monotonic()
+        self._publish_progress(active_progress_name, progress_started_at)
 
         try:
             if self.cvcf is not None:
@@ -313,6 +332,7 @@ class TestRunner:
                 csv_file.flush()
 
                 now = time.monotonic()
+                self._publish_progress(active_progress_name, progress_started_at)
                 if track_overload:
                     overload_candidate = self._update_overload_candidate(
                         plan,
@@ -356,9 +376,18 @@ class TestRunner:
 
                 if wait_seconds <= 0:
                     continue
-                if stop_event.wait(wait_seconds):
+                if self._wait_with_progress(
+                    stop_event,
+                    wait_seconds,
+                    active_progress_name,
+                    progress_started_at,
+                ):
                     break
         finally:
+            self._publish_progress(
+                f"{active_progress_name} 후처리",
+                time.monotonic(),
+            )
             if recorder_started:
                 try:
                     self.recorder.recording_stop()
@@ -389,6 +418,30 @@ class TestRunner:
                 )
 
         return condition_elapsed_seconds, overload_candidate
+
+    def _publish_progress(self, test_name, started_at):
+        if self.progress_callback is None:
+            return
+        elapsed_seconds = time.monotonic() - started_at
+        self.progress_callback(test_name, elapsed_seconds)
+
+    def _wait_with_progress(
+        self,
+        stop_event,
+        wait_seconds,
+        test_name,
+        started_at=None,
+    ):
+        started = time.monotonic() if started_at is None else started_at
+        deadline = time.monotonic() + wait_seconds
+        while True:
+            self._publish_progress(test_name, started)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            if stop_event.wait(min(1.0, remaining)):
+                self._publish_progress(test_name, started)
+                return True
 
     def _download_and_convert_recording(
         self,
