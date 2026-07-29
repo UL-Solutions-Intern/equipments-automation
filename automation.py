@@ -243,11 +243,17 @@ class PowerAnalyzerGUI:
         button_frame = tk.Frame(control_frame)
         button_frame.pack(anchor="center")
 
-        progress_frame = tk.Frame(main_frame)
-        progress_frame.pack(anchor="center", pady=(0, 10))
-
-        output_frame = tk.Frame(main_frame)
-        output_frame.pack(anchor="center", pady=(0, 10))
+        progress_box = tk.Frame(
+            main_frame,
+            bg="white",
+            bd=1,
+            relief="solid",
+            padx=18,
+            pady=8,
+        )
+        progress_box.pack(fill="x", padx=24, pady=(0, 10))
+        progress_frame = tk.Frame(progress_box, bg="white")
+        progress_frame.pack(fill="x")
 
         log_header = tk.Frame(main_frame)
         tk.Label(log_header, text="로그").pack(side="left")
@@ -468,44 +474,40 @@ class PowerAnalyzerGUI:
         )
         self.folder_label.pack(anchor="center", padx=10, pady=(5, 0))
 
-        tk.Label(progress_frame, text="[현재 진행중인 테스트]").grid(
+        tk.Label(
+            progress_frame,
+            text="[현재 진행중인 테스트]",
+            bg="white",
+        ).grid(
             row=0, column=0, sticky="w", padx=(0, 16), pady=3
         )
-        tk.Label(progress_frame, text="테스트 이름:").grid(
+        tk.Label(progress_frame, text="진행 시간:", bg="white").grid(
             row=0, column=1, sticky="w", padx=(0, 8), pady=3
-        )
-        self.current_test_label = tk.Label(
-            progress_frame,
-            text="대기 중",
-            anchor="w",
-        )
-        self.current_test_label.grid(
-            row=0, column=2, sticky="w", padx=(0, 36), pady=3
-        )
-
-        tk.Label(progress_frame, text="진행 시간:").grid(
-            row=0, column=3, sticky="w", padx=(0, 8), pady=3
         )
         self.elapsed_time_label = tk.Label(
             progress_frame,
             text="0초",
             anchor="w",
+            width=12,
+            bg="white",
         )
-        self.elapsed_time_label.grid(row=0, column=4, sticky="w", pady=3)
+        self.elapsed_time_label.grid(
+            row=0, column=2, sticky="w", padx=(0, 16), pady=3
+        )
 
-        # 실시간 측정값 표시
-        tk.Label(output_frame, text="[실시간 측정값]").pack(
-            side="left", anchor="w", padx=(0, 16)
+        tk.Label(progress_frame, text="테스트 이름:", bg="white").grid(
+            row=0, column=3, sticky="w", padx=(0, 8), pady=3
         )
-        self.dl_values_label = tk.Label(
-            output_frame, text="DL 측정값: V=N/A, A=N/A"
+        self.current_test_label = tk.Label(
+            progress_frame,
+            text="대기 중",
+            anchor="w",
+            width=36,
+            bg="white",
         )
-        self.dl_values_label.pack(side="left", anchor="w")
-
-        self.pm_values_label = tk.Label(
-            output_frame, text="PM 측정값: V=N/A, A=N/A, Hz=N/A"
-        )
-        self.pm_values_label.pack(side="left", anchor="w", padx=(16, 0))
+        self.current_test_label.grid(row=0, column=4, sticky="w", pady=3)
+        progress_frame.grid_columnconfigure(2, minsize=70)
+        progress_frame.grid_columnconfigure(4, minsize=300)
 
         # 로그 출력 박스
         log_content = tk.Frame(self.log_frame)
@@ -524,13 +526,17 @@ class PowerAnalyzerGUI:
     def update_measurement_display(
         self, voltage_meas, current_meas, pm_v, pm_a, pm_p, pm_hz
     ):
-        """UI에 실시간 측정값 표시"""
-        self.dl_values_label.config(
-            text=f"DL 측정값: V={voltage_meas}, A={current_meas}"
-        )
-        self.pm_values_label.config(
-            text=f"PM 측정값: V={pm_v}, A={pm_a},P={pm_p}, Hz={pm_hz}"
-        )
+        """실시간 측정값 표시는 현재 UI에서 사용하지 않는다."""
+        return None
+
+    def update_progress_display(self, test_name, elapsed_seconds):
+        """worker thread에서 전달된 현재 시험명과 경과 시간을 UI에 표시한다."""
+
+        def apply_update():
+            self.current_test_label.config(text=test_name or "대기 중")
+            self.elapsed_time_label.config(text=f"{max(0, int(elapsed_seconds))}초")
+
+        self.root.after(0, apply_update)
 
     def _toggle_overload_controls(self):
         """OverLoad 수행 여부에 따라 관련 설정 입력을 활성화한다."""
@@ -809,6 +815,7 @@ class PowerAnalyzerGUI:
 
         self.stop_event.clear()
         self._set_overload_target_text("")
+        self.update_progress_display("대기 중", 0)
         self.is_testing = True
         self.test_runner = TestRunner(
             recorder=self.devices[RECORDER].driver,
@@ -818,12 +825,15 @@ class PowerAnalyzerGUI:
             log_callback=self.log,
             pdf_converter=convert_raw_to_pdf,
             overload_target_callback=self.update_overload_target_display,
+            progress_callback=self.update_progress_display,
         )
 
         def execute_test():
             try:
                 self.test_runner.run(plan, self.stop_event)
             finally:
+                final_status = "중지됨" if self.stop_event.is_set() else "완료"
+                self.update_progress_display(final_status, 0)
                 self.is_testing = False
                 self.test_runner = None
 
