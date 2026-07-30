@@ -7,7 +7,7 @@ from unittest.mock import patch
 from pdf_converter import accept_universal_viewer_save_prompt, convert_raw_to_pdf
 from integrations.universal_viewer.viewer_discovery import WindowInfo
 from test_models import ElectricalMode, TestCondition, TestPlan
-from test_runner import TestRunner
+from test_runner import format_ampere_filename_suffix, TestRunner
 
 
 class FakeStopEvent:
@@ -37,6 +37,27 @@ class FakeRecorder:
     def download_recording_file(self, _folder, previous_files, _local_filename_stem):
         assert previous_files == {"previous.DAE"}
         return "result.DAE", self.raw_path, 123
+
+
+class FakePowerMeter:
+    def __init__(self, current):
+        self.current = current
+        self.initialized = False
+
+    def initialize(self):
+        self.initialized = True
+
+    def read_voltage(self):
+        return "9.005E+01"
+
+    def read_current(self):
+        return self.current
+
+    def read_power(self):
+        return "1.627E+01"
+
+    def read_frequency(self):
+        return "6.000E+01"
 
 
 class FakeDialogWrapper:
@@ -119,6 +140,40 @@ class PdfIntegrationTests(TestCase):
         self.assertEqual(args[0], raw_path.resolve())
         self.assertEqual(kwargs["explicit_output_pdf"], raw_path.with_suffix(".pdf").resolve())
 
+    def test_converter_appends_current_suffix_to_pdf_filename(self):
+        raw_path = Path(self.temp_directory.name) / "result.DAE"
+        raw_path.write_bytes(b"raw")
+        pdf_result = SimpleNamespace(
+            output_pdf_path=raw_path.with_name("result_0.346A.pdf"),
+            pdf_size_bytes=456,
+        )
+        workflow_result = SimpleNamespace(pdf_result=pdf_result)
+
+        with patch(
+            "pdf_converter.run_manual_pdf_workflow",
+            return_value=workflow_result,
+        ) as run_workflow:
+            result = convert_raw_to_pdf(
+                raw_path,
+                lambda _message: None,
+                pdf_filename_suffix="_0.346A",
+            )
+
+        self.assertIs(result, pdf_result)
+        workflow_kwargs = run_workflow.call_args.kwargs
+        self.assertEqual(
+            workflow_kwargs["explicit_output_pdf"],
+            raw_path.with_name("result_0.346A.pdf").resolve(),
+        )
+
+    def test_ampere_filename_suffix_formats_pm_a_value(self):
+        self.assertEqual(format_ampere_filename_suffix("3.4614E-01"), "_0.346A")
+        self.assertEqual(format_ampere_filename_suffix("1.2000E+00"), "_1.2A")
+        self.assertEqual(format_ampere_filename_suffix("2.000"), "_2A")
+        self.assertEqual(format_ampere_filename_suffix("-4.000E-04"), "_0A")
+        self.assertEqual(format_ampere_filename_suffix(""), "")
+        self.assertEqual(format_ampere_filename_suffix("N/A"), "")
+
     def test_save_changes_prompt_is_accepted_when_universal_viewer_closes(self):
         clicks = []
         yes_button = FakeDialogWrapper("예(&Y)", "Button", 1111, clicks=clicks)
@@ -156,8 +211,8 @@ class PdfIntegrationTests(TestCase):
         calls = []
         logs = []
 
-        def convert(path, log_callback):
-            calls.append((path, log_callback))
+        def convert(path, log_callback, *, pdf_filename_suffix=""):
+            calls.append((path, log_callback, pdf_filename_suffix))
             return SimpleNamespace(
                 output_pdf_path=Path("result.pdf"),
                 pdf_size_bytes=456,
@@ -184,14 +239,53 @@ class PdfIntegrationTests(TestCase):
 
         runner.run(plan, FakeStopEvent())
 
-        self.assertEqual(calls, [(raw_path, logs.append)])
+        self.assertEqual(calls, [(raw_path, logs.append, "")])
         self.assertTrue(any("PDF saved: result.pdf (456 bytes)" in line for line in logs))
+
+    def test_downloaded_pdf_filename_suffix_uses_pm_a_value(self):
+        raw_path = Path("result.DAE")
+        calls = []
+        logs = []
+        power_meter = FakePowerMeter("3.4614E-01")
+
+        def convert(path, log_callback, *, pdf_filename_suffix=""):
+            calls.append((path, log_callback, pdf_filename_suffix))
+            return SimpleNamespace(
+                output_pdf_path=Path("result_0.346A.pdf"),
+                pdf_size_bytes=456,
+            )
+
+        runner = TestRunner(
+            recorder=FakeRecorder(raw_path),
+            power_meter=power_meter,
+            output_folder=self.temp_directory.name,
+            log_callback=logs.append,
+            pdf_converter=convert,
+        )
+        plan = TestPlan(
+            test_name="integration",
+            electrical_mode=ElectricalMode.AC,
+            conditions=[TestCondition()],
+            duration_seconds=0,
+            sample_interval_seconds=1,
+            cooldown_seconds=0,
+            first_channel="0001",
+            last_channel="0001",
+            temperature_channels=["0001"],
+            saturation_enabled=False,
+        )
+
+        runner.run(plan, FakeStopEvent())
+
+        self.assertTrue(power_meter.initialized)
+        self.assertEqual(calls, [(raw_path, logs.append, "_0.346A")])
+        self.assertTrue(any("PDF saved: result_0.346A.pdf (456 bytes)" in line for line in logs))
 
     def test_pdf_failure_does_not_fail_recorder_download(self):
         raw_path = Path("result.GEV")
         logs = []
 
-        def fail_conversion(_path, _log_callback):
+        def fail_conversion(_path, _log_callback, *, pdf_filename_suffix=""):
             raise RuntimeError("viewer unavailable")
 
         runner = TestRunner(
