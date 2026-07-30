@@ -528,16 +528,16 @@ class CursorValueTests(unittest.TestCase):
         self.assertEqual(interpolate_a_cursor_candidate_rel(1.0), AB_CURSOR_A_SEARCH_RIGHT_LIMIT_REL)
 
     def test_adjust_ab_cursor_acceptance_boundaries(self) -> None:
-        self.assertEqual((AB_CURSOR_ACCEPT_MIN_SECONDS, AB_CURSOR_ACCEPT_MAX_SECONDS), (1795, 1800))
+        self.assertEqual((AB_CURSOR_ACCEPT_MIN_SECONDS, AB_CURSOR_ACCEPT_MAX_SECONDS), (1795, 1805))
         self.assertTrue(is_ab_cursor_seconds_accepted(1795))
-        self.assertTrue(is_ab_cursor_seconds_accepted(1800))
-        self.assertFalse(is_ab_cursor_seconds_accepted(1801))
+        self.assertTrue(is_ab_cursor_seconds_accepted(1805))
+        self.assertFalse(is_ab_cursor_seconds_accepted(1806))
         self.assertFalse(is_ab_cursor_seconds_accepted(1794))
-        self.assertEqual(classify_ab_cursor_seconds(1801), "too long, move A right")
+        self.assertEqual(classify_ab_cursor_seconds(1806), "too long, move A right")
         self.assertEqual(classify_ab_cursor_seconds(1794), "too short, move A left")
 
-    def test_adjust_ab_cursor_accepts_initial_1795_or_1800(self) -> None:
-        for duration in ("00:29:55.000", "00:30:00.000"):
+    def test_adjust_ab_cursor_accepts_initial_1795_or_1805(self) -> None:
+        for duration in ("00:29:55.000", "00:30:05.000"):
             with self.subTest(duration=duration):
                 result = adjust_ab_cursors_to_30min(
                     self.logger,
@@ -891,7 +891,7 @@ class CursorValueTests(unittest.TestCase):
         self.assertIn("b_release_rel=(0.651,0.607)", output)
         self.assertIn("absolute time difference: 00:29:55.000", output)
         self.assertIn("difference seconds: 1795", output)
-        self.assertIn("accepted range: 1795-1800 seconds", output)
+        self.assertIn("accepted range: 1795-1805 seconds", output)
         self.assertIn("PDF was not printed", output)
 
     def test_adjust_ab_cursor_cli_rejects_raw_files(self) -> None:

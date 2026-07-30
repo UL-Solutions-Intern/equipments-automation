@@ -4,6 +4,7 @@ from collections import deque
 import csv
 from dataclasses import dataclass
 from datetime import datetime
+import math
 from pathlib import Path
 import time
 
@@ -29,6 +30,25 @@ class OverloadCandidate:
     display_channel: str
     temperature: float
     timestamp: datetime
+
+
+def format_ampere_filename_suffix(value) -> str:
+    """Format a PM_A value for appending to the generated PDF filename."""
+    if value is None:
+        return ""
+
+    try:
+        amperes = float(str(value).strip())
+    except (TypeError, ValueError):
+        return ""
+
+    if not math.isfinite(amperes):
+        return ""
+
+    formatted = f"{amperes:.3f}".rstrip("0").rstrip(".")
+    if formatted == "-0":
+        formatted = "0"
+    return f"_{formatted}A"
 
 
 class StabilizationTracker:
@@ -245,6 +265,7 @@ class TestRunner:
         cvcf_output_enabled = False
         recorder_files_before = None
         condition_started_at = None
+        last_pm_current = None
         active_progress_name = progress_name or build_overload_target_label(
             recording_test_name or plan.test_name,
             plan.electrical_mode,
@@ -319,6 +340,7 @@ class TestRunner:
                     plan.last_channel,
                 )
                 power = self._read_power(plan.electrical_mode)
+                last_pm_current = power.current
                 self._write_result(
                     writer,
                     plan,
@@ -415,6 +437,7 @@ class TestRunner:
                 self._download_and_convert_recording(
                     recorder_files_before,
                     local_filename_stem,
+                    pm_current=last_pm_current,
                 )
 
         return condition_elapsed_seconds, overload_candidate
@@ -447,6 +470,8 @@ class TestRunner:
         self,
         recorder_files_before,
         local_filename_stem,
+        *,
+        pm_current=None,
     ):
         try:
             result = self.recorder.download_recording_file(
@@ -461,7 +486,12 @@ class TestRunner:
             if self.pdf_converter is None:
                 return
             try:
-                pdf_result = self.pdf_converter(local_path, self.log)
+                pdf_filename_suffix = format_ampere_filename_suffix(pm_current)
+                pdf_result = self.pdf_converter(
+                    local_path,
+                    self.log,
+                    pdf_filename_suffix=pdf_filename_suffix,
+                )
                 self.log(
                     f"PDF saved: {pdf_result.output_pdf_path} "
                     f"({pdf_result.pdf_size_bytes} bytes)"

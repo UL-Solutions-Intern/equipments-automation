@@ -33,10 +33,17 @@ class _CallbackHandler(logging.Handler):
 def convert_raw_to_pdf(
     raw_path: str | Path,
     log_callback: Callable[[str], None] = print,
+    *,
+    pdf_filename_suffix: str = "",
 ) -> PrintToPdfResult:
     """Apply the complete Viewer report workflow and print a unique PDF."""
     source = Path(raw_path).expanduser().resolve()
-    output_pdf = make_unique_pdf_path(source.with_suffix(".pdf"))
+    output_source = source.with_suffix(".pdf")
+    if pdf_filename_suffix:
+        output_source = output_source.with_name(
+            f"{output_source.stem}{pdf_filename_suffix}{output_source.suffix}"
+        )
+    output_pdf = make_unique_pdf_path(output_source)
     config = AppConfig(project_root=PROJECT_ROOT)
 
     logger = logging.getLogger(f"equipment_automation.pdf.{id(log_callback)}")
