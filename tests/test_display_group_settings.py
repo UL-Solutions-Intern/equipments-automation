@@ -239,7 +239,7 @@ class DisplayGroupSettingsTests(unittest.TestCase):
             1111,
             True,
             True,
-            "(0, 0, 653, 516)",
+            "(0, 0, 942, 736)",
         )
 
         self.assertIs(select_display_group_gev_workflow_profile(dialog), DISPLAY_GROUP_PROFILE_GEV_WORKFLOW)
