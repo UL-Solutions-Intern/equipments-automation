@@ -393,6 +393,24 @@ DISPLAY_GROUP_PROFILE_C_WORKFLOW_942x736 = {
     "dest_w48_end": (0.048832, 0.820652),
 }
 DISPLAY_GROUP_COORDINATE_PROFILES = (DISPLAY_GROUP_PROFILE_C_WORKFLOW_942x736,)
+DISPLAY_GROUP_PROFILE_GEV_WORKFLOW_NAME = "DISPLAY_GROUP_PROFILE_GEV_WORKFLOW"
+DISPLAY_GROUP_PROFILE_GEV_WORKFLOW = {
+    "dialog_title": "표시 그룹 설정",
+    "dialog_class": "#32770",
+    # GEV keeps its 20-channel transfer ranges while sharing the verified
+    # 942x736 Universal Viewer dialog layout used by the DAE workflow.
+    "dialog_size": (942, 736),
+    "tab_02": DISPLAY_GROUP_PROFILE_C_WORKFLOW_942x736["tab_02"],
+    "source_w01_start": DISPLAY_GROUP_PROFILE_C_WORKFLOW_942x736["source_w01_start"],
+    "source_w20_end": (0.048832, 0.618207),
+    "copy_detail": DISPLAY_GROUP_PROFILE_C_WORKFLOW_942x736["copy_detail"],
+    "tab_01": DISPLAY_GROUP_PROFILE_C_WORKFLOW_942x736["tab_01"],
+    "scroll_down": DISPLAY_GROUP_PROFILE_C_WORKFLOW_942x736["scroll_down"],
+    "dest_w21_start": (0.052548, 0.234216),
+    "dest_w40_end": (0.047771, 0.643585),
+    "paste": DISPLAY_GROUP_PROFILE_C_WORKFLOW_942x736["paste"],
+    "ok": DISPLAY_GROUP_PROFILE_C_WORKFLOW_942x736["ok"],
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -1389,7 +1407,91 @@ def apply_display_group_geometry_actions_confirmed(
     )
 
 
+def select_display_group_workflow_for_raw_path(source_path: Path) -> str:
+    """raw data 확장자에 맞는 Display Group Settings workflow 이름을 반환한다."""
+    extension = source_path.suffix.lower()
+    if extension == ".dae":
+        return "DAE"
+    if extension == ".gev":
+        return "GEV"
+    raise DisplayGroupInspectionError(
+        f"지원하지 않는 Display Group Settings raw data 확장자입니다: {source_path.suffix!r}"
+    )
+
+
 def apply_display_group_max_48_confirmed(
+    source_path: Path,
+    config: AppConfig,
+    logger: logging.Logger,
+    *,
+    explicit_viewer_exe: Path | None = None,
+    open_raw_file_fn: OpenRawFileFunction = open_prepared_raw_file,
+    menu_open_fn: MenuOpenFunction | None = None,
+    dialog_detector_fn: DialogDetectorFunction | None = None,
+    raw_hint_collector: RawHintCollector = collect_opened_raw_file_hints,
+    profile: DisplayGroupGeometryProfile = DEFAULT_DISPLAY_GROUP_GEOMETRY_PROFILE,
+    click_fn: GeometryClickFunction | None = None,
+    drag_fn: GeometryDragFunction | None = None,
+    move_fn: GeometryMoveFunction | None = None,
+    scroll_fn: GeometryScrollFunction | None = None,
+    wait_fn: GeometryWaitFunction = time.sleep,
+    dialog_ready_fn: DialogReadyFunction | None = None,
+    close_dialog_fn: Callable[[logging.Logger], str] | None = None,
+    popup_detector_fn: UnexpectedPopupDetectorFunction | None = None,
+    time_axis_full_display_fn: TimeAxisFullDisplayFunction | None = None,
+    message_printer: MessagePrinter | None = None,
+) -> DisplayGroupApplyConfirmedResult:
+    """raw data 확장자에 따라 DAE max-48 또는 GEV Display Group workflow를 실행한다."""
+    workflow = select_display_group_workflow_for_raw_path(source_path)
+    if workflow == "GEV":
+        logger.warning("Using GEV Display Group Settings workflow")
+        return apply_display_group_gev_workflow(
+            source_path,
+            config,
+            logger,
+            explicit_viewer_exe=explicit_viewer_exe,
+            open_raw_file_fn=open_raw_file_fn,
+            menu_open_fn=menu_open_fn,
+            dialog_detector_fn=dialog_detector_fn,
+            raw_hint_collector=raw_hint_collector,
+            profile=profile,
+            click_fn=click_fn,
+            drag_fn=drag_fn,
+            move_fn=move_fn,
+            scroll_fn=scroll_fn,
+            wait_fn=wait_fn,
+            dialog_ready_fn=dialog_ready_fn,
+            close_dialog_fn=close_dialog_fn,
+            popup_detector_fn=popup_detector_fn,
+            time_axis_full_display_fn=time_axis_full_display_fn,
+            message_printer=message_printer,
+        )
+
+    logger.warning("Using DAE Display Group Settings workflow")
+    return _apply_display_group_dae_max_48_confirmed(
+        source_path,
+        config,
+        logger,
+        explicit_viewer_exe=explicit_viewer_exe,
+        open_raw_file_fn=open_raw_file_fn,
+        menu_open_fn=menu_open_fn,
+        dialog_detector_fn=dialog_detector_fn,
+        raw_hint_collector=raw_hint_collector,
+        profile=profile,
+        click_fn=click_fn,
+        drag_fn=drag_fn,
+        move_fn=move_fn,
+        scroll_fn=scroll_fn,
+        wait_fn=wait_fn,
+        dialog_ready_fn=dialog_ready_fn,
+        close_dialog_fn=close_dialog_fn,
+        popup_detector_fn=popup_detector_fn,
+        time_axis_full_display_fn=time_axis_full_display_fn,
+        message_printer=message_printer,
+    )
+
+
+def _apply_display_group_dae_max_48_confirmed(
     source_path: Path,
     config: AppConfig,
     logger: logging.Logger,
@@ -1571,6 +1673,191 @@ def apply_display_group_max_48_confirmed(
     )
     for line in safety_summary:
         logger.warning("max-48 confirmed safety summary | %s", line)
+
+    return DisplayGroupApplyConfirmedResult(
+        opened=opened,
+        menu_path=menu_path,
+        dialog=dialog_top,
+        geometry=geometry,
+        preview=preview,
+        executed_actions=tuple(executed_actions),
+        before_raw_file_hints=before_hints,
+        after_raw_file_hints=after_hints,
+        state_unchanged=state_unchanged,
+        close_method=close_method,
+        safety_summary=safety_summary,
+    )
+
+
+def apply_display_group_gev_workflow(
+    source_path: Path,
+    config: AppConfig,
+    logger: logging.Logger,
+    *,
+    explicit_viewer_exe: Path | None = None,
+    open_raw_file_fn: OpenRawFileFunction = open_prepared_raw_file,
+    menu_open_fn: MenuOpenFunction | None = None,
+    dialog_detector_fn: DialogDetectorFunction | None = None,
+    raw_hint_collector: RawHintCollector = collect_opened_raw_file_hints,
+    profile: DisplayGroupGeometryProfile = DEFAULT_DISPLAY_GROUP_GEOMETRY_PROFILE,
+    click_fn: GeometryClickFunction | None = None,
+    drag_fn: GeometryDragFunction | None = None,
+    move_fn: GeometryMoveFunction | None = None,
+    scroll_fn: GeometryScrollFunction | None = None,
+    wait_fn: GeometryWaitFunction = time.sleep,
+    dialog_ready_fn: DialogReadyFunction | None = None,
+    close_dialog_fn: Callable[[logging.Logger], str] | None = None,
+    popup_detector_fn: UnexpectedPopupDetectorFunction | None = None,
+    time_axis_full_display_fn: TimeAxisFullDisplayFunction | None = None,
+    message_printer: MessagePrinter | None = None,
+) -> DisplayGroupApplyConfirmedResult:
+    """GP20 .GEV raw data 전용 Display Group Settings workflow."""
+    logger.warning("GEV Display Group Settings workflow started | source=%s", source_path)
+    logger.warning("no heating_point_count is required")
+    logger.warning("source group/page 02 W01~W20 will be copied to group/page 01 W21~W40")
+    logger.warning("no Enter prompts will be used")
+    logger.warning("PDF will not be printed")
+
+    opened = open_raw_file_fn(source_path, config, logger, explicit_viewer_exe=explicit_viewer_exe)
+    logger.info("GEV Display Group Settings 작업본 열림 확인 | 작업본=%s", opened.work_copy_path)
+    if not opened.hint_verified:
+        raise DisplayGroupInspectionError(
+            "작업본이 Universal Viewer에 열린 상태를 확인하지 못해 GEV Display Group Settings workflow를 중단합니다. "
+            f"작업본={opened.work_copy_path} | 수집 힌트={opened.raw_file_hints}"
+        )
+
+    click_action = click_fn or click_geometry_point
+    drag_action = drag_fn or drag_geometry_between_points
+    move_action = move_fn or move_geometry_pointer
+    scroll_action = scroll_fn or scroll_geometry_grid
+    apply_time_axis = time_axis_full_display_fn or apply_time_axis_full_display_by_coordinates
+    apply_time_axis(opened, logger, click_fn=click_action, move_fn=move_action, wait_fn=wait_fn)
+    logger.warning("BEFORE opening Display Group Settings")
+
+    baseline_hwnds = tuple(window.hwnd for window in capture_top_level_windows(opened.main_window.pid))
+    before_hints = opened.raw_file_hints
+    open_menu = menu_open_fn or open_display_group_settings_dialog_via_menu
+    detect_dialog = dialog_detector_fn or detect_display_group_dialog
+    close_dialog = close_dialog_fn or close_display_group_dialog_geometry_with_escape
+    ensure_dialog_ready = dialog_ready_fn or ensure_display_group_gev_dialog_ready
+    detect_popups = popup_detector_fn or detect_unexpected_channel_popups
+    printer = message_printer or print
+
+    dialog_top: Win32WindowSnapshot | None = None
+    executed_actions: list[ExecutedGeometryAction] = []
+    close_method = "not_closed"
+    ok_clicked = False
+    try:
+        menu_path = open_menu(opened, logger)
+        logger.info("GEV Display Group Settings 메뉴 경로 사용 | %s", menu_path)
+        logger.warning("AFTER opening Display Group Settings | menu_path=%s", menu_path)
+        dialog_top = detect_dialog(opened.main_window.pid, baseline_hwnds, logger)
+        dialog_top = read_win32_window_snapshot(dialog_top.hwnd) or dialog_top
+        geometry = calculate_display_group_geometry(dialog_top.rectangle, profile)
+        coordinate_profile = require_display_group_gev_workflow_profile(dialog_top, logger)
+        logger.warning(
+            "Display Group coordinate profile selected | profile=%s | title=%s | class=%s | size=%s",
+            DISPLAY_GROUP_PROFILE_GEV_WORKFLOW_NAME,
+            coordinate_profile["dialog_title"],
+            coordinate_profile["dialog_class"],
+            coordinate_profile["dialog_size"],
+        )
+        sequence = build_display_group_gev_confirmed_sequence_from_coordinate_profile(
+            geometry.dialog_rect,
+            coordinate_profile,
+        )
+        preview = build_display_group_coordinate_profile_preview(sequence, heating_point_count=40)
+        validate_planned_geometry_actions_inside_dialog(list(preview.actions), geometry.dialog_rect)
+        validate_confirmed_apply_sequence(sequence, geometry.dialog_rect, geometry=geometry)
+        validate_display_group_gev_sequence(sequence)
+        print_and_log_actual_click_test_sequence(sequence, logger, printer)
+
+        for step in sequence:
+            current_dialog = ensure_dialog_ready(dialog_top, logger)
+            if current_dialog is None:
+                raise DisplayGroupInspectionError("GEV workflow에서 fresh 표시 그룹 설정창을 확인하지 못해 클릭 전 중단합니다.")
+            fresh_geometry = calculate_display_group_geometry(current_dialog.rectangle, profile)
+            fresh_sequence = build_display_group_gev_sequence_for_dialog(
+                current_dialog,
+                fresh_geometry,
+                required_coordinate_profile=coordinate_profile,
+            )
+            step = matching_fresh_actual_click_step(step, fresh_sequence)
+            validate_actual_click_step_against_fresh_dialog(step, current_dialog, logger)
+            log_display_group_profile_workflow_step_context(
+                step,
+                current_dialog,
+                logger,
+                profile_name=DISPLAY_GROUP_PROFILE_GEV_WORKFLOW_NAME,
+            )
+
+            if step.action_type == "ok_click":
+                ensure_no_unexpected_channel_popup(detect_popups, opened.main_window.pid, logger)
+                logger.warning("BEFORE OK click | point=%s", step.point)
+                wait_fn(DISPLAY_GROUP_ACTION_WAIT_SECONDS)
+            elif step.action_type == "scrollbar_down_click":
+                logger.warning("BEFORE scrollbar down click | scrollbar_down_click_abs=%s", step.point)
+            elif step.action_type == "destination_drag_select":
+                logger.warning("BEFORE destination drag | %s | drag_start=%s | drag_end=%s", step.description, step.drag_start, step.drag_end)
+            elif step.action_type == "paste_click":
+                logger.warning("BEFORE paste | %s | point=%s", paste_step_transfer_summary(step), step.point)
+            else:
+                logger.warning("BEFORE %s | %s", step.action_type, format_actual_click_test_step(step))
+
+            executed = execute_actual_click_test_step(
+                step,
+                click_fn=click_action,
+                drag_fn=drag_action,
+                move_fn=move_action,
+                scroll_fn=scroll_action,
+            )
+            executed_actions.append(executed)
+
+            if step.action_type == "ok_click":
+                ok_clicked = True
+                close_method = "OK"
+                logger.warning("AFTER OK click | point=%s", step.point)
+                logger.warning("OK was clicked intentionally in GEV Display Group Settings workflow")
+            elif step.action_type == "scrollbar_down_click":
+                logger.warning(
+                    "AFTER scrollbar down click; assuming W21~W40 visible | scrollbar_down_click_abs=%s",
+                    step.point,
+                )
+            elif step.action_type == "destination_drag_select":
+                logger.warning("AFTER destination drag | %s", format_executed_geometry_action(executed))
+            elif step.action_type == "paste_click":
+                logger.warning("AFTER paste | %s", paste_step_transfer_summary(step))
+            else:
+                logger.warning("AFTER %s | %s", step.action_type, format_executed_geometry_action(executed))
+
+            if step.action_type != "ok_click":
+                ensure_no_unexpected_channel_popup(detect_popups, opened.main_window.pid, logger)
+            wait_fn(confirmed_apply_wait_after_step(step))
+
+        logger.warning("GEV Display Group Settings workflow completed")
+    except Exception:
+        if dialog_top is not None and not ok_clicked:
+            try:
+                close_dialog(logger)
+                logger.info("오류 발생 후 GEV Display Group Settings 창 ESC 닫기 완료")
+            except Exception as close_exc:
+                logger.warning("오류 발생 후 GEV Display Group Settings 창 닫기 실패: %s", close_exc)
+        raise
+
+    after_hints = raw_hint_collector(opened.main_window.handle)
+    state_unchanged = bool(matching_work_copy_hints(after_hints, opened.work_copy_path))
+    safety_summary = (
+        "GEV Display Group Settings workflow completed",
+        "source group/page 02 W01~W20 copied to group/page 01 W21~W40",
+        "OK was clicked intentionally in GEV Display Group Settings workflow",
+        "Apply was not clicked",
+        "PDF was not printed",
+        "Save dialog was not opened",
+        "Microsoft Print to PDF was not used",
+        "dialog closed by OK",
+    )
+    for line in safety_summary:
+        logger.warning("GEV Display Group Settings safety summary | %s", line)
 
     return DisplayGroupApplyConfirmedResult(
         opened=opened,
@@ -2140,6 +2427,33 @@ def validate_display_group_max_48_sequence(sequence: tuple[ActualClickTestStep, 
         raise DisplayGroupInspectionError("max-48 sequence는 네 번의 paste 후 마지막에 OK를 눌러야 합니다.")
 
 
+def validate_display_group_gev_sequence(sequence: tuple[ActualClickTestStep, ...]) -> None:
+    """GEV workflow의 고정 copy/paste 구조를 검증한다."""
+    action_types = tuple(step.action_type for step in sequence)
+    expected = (
+        "tab_02_click",
+        "source_drag_select",
+        "copy_detail_click",
+        "tab_01_click",
+        "scrollbar_down_click",
+        "destination_drag_select",
+        "paste_click",
+        "ok_click",
+    )
+    if action_types != expected:
+        raise DisplayGroupInspectionError(f"GEV sequence order가 예상과 다릅니다: {action_types}")
+
+    descriptions = "\n".join(step.description for step in sequence)
+    required_parts = (
+        "source group/page 02 W01~W20",
+        "destination group/page 01 W21~W40",
+        "source group/page 02 to destination W21~W40",
+    )
+    for part in required_parts:
+        if part not in descriptions:
+            raise DisplayGroupInspectionError(f"GEV sequence에 필수 설명이 없습니다: {part}")
+
+
 def validate_actual_click_test_step_coordinates_inside_dialog(
     sequence: tuple[ActualClickTestStep, ...],
     dialog_rect: tuple[int, int, int, int],
@@ -2480,6 +2794,38 @@ def log_actual_click_step_coordinate_context(
             "Display Group action coordinate | step=%s | type=%s | coordinate=%s | rel=%s | abs=%s | dialog_rect=%s | dialog_size=%sx%s",
             step.step,
             step.action_type,
+            coordinate_name,
+            relative_point(point, rect),
+            point,
+            rect,
+            width,
+            height,
+        )
+
+
+def log_display_group_profile_workflow_step_context(
+    step: "ActualClickTestStep",
+    dialog: Win32WindowSnapshot,
+    logger: logging.Logger,
+    *,
+    profile_name: str,
+) -> None:
+    """profile workflow action 직전 fresh dialog 기준 rel/abs 좌표를 남긴다."""
+    rect = parse_rectangle_text(dialog.rectangle)
+    if rect is None:
+        return
+    width, height = display_group_dialog_size(rect)
+    for coordinate_name, point in (
+        ("point", step.point),
+        ("drag_start", step.drag_start),
+        ("drag_end", step.drag_end),
+    ):
+        if point is None:
+            continue
+        logger.info(
+            "Display Group workflow step | step_name=%s | profile=%s | coordinate=%s | relative_coordinate=%s | absolute_coordinate=%s | fresh_dialog_rect=%s | fresh_dialog_size=%sx%s",
+            step.action_type,
+            profile_name,
             coordinate_name,
             relative_point(point, rect),
             point,
@@ -3703,6 +4049,93 @@ def require_display_group_coordinate_profile(dialog: Win32WindowSnapshot) -> dic
     return profile
 
 
+def select_display_group_gev_workflow_profile(
+    dialog: Win32WindowSnapshot,
+    *,
+    tolerance: int = DISPLAY_GROUP_PROFILE_SIZE_TOLERANCE_PX,
+) -> dict[str, object] | None:
+    """GP20 .GEV workflow에서만 사용할 Display Group 좌표 프로필을 선택한다."""
+    return select_display_group_coordinate_profile(
+        dialog,
+        profiles=(DISPLAY_GROUP_PROFILE_GEV_WORKFLOW,),
+        tolerance=tolerance,
+    )
+
+
+def require_display_group_gev_workflow_profile(
+    dialog: Win32WindowSnapshot,
+    logger: logging.Logger | None = None,
+) -> dict[str, object]:
+    """GEV workflow profile title/class/size가 맞지 않으면 클릭 전에 중단한다."""
+    profile = select_display_group_gev_workflow_profile(dialog)
+    if profile is not None:
+        return profile
+
+    rect = parse_rectangle_text(dialog.rectangle)
+    actual_size = display_group_dialog_size(rect) if rect is not None else "unknown"
+    expected_size = DISPLAY_GROUP_PROFILE_GEV_WORKFLOW["dialog_size"]
+    tolerance = DISPLAY_GROUP_PROFILE_SIZE_TOLERANCE_PX
+    if logger is not None:
+        logger.error(
+            "GEV Display Group Settings profile size mismatch | expected=%s±%spx | actual=%s | title=%r | class=%r | rectangle=%r",
+            expected_size,
+            tolerance,
+            actual_size,
+            dialog.title,
+            dialog.class_name,
+            dialog.rectangle,
+        )
+    raise DisplayGroupInspectionError(
+        "GEV Display Group Settings size does not match verified GEV profile; aborting before clicking. "
+        f"expected={expected_size}±{tolerance}px, actual={actual_size}, "
+        f"title={dialog.title!r}, class={dialog.class_name!r}, rectangle={dialog.rectangle!r}"
+    )
+
+
+def ensure_display_group_gev_dialog_ready(dialog: Win32WindowSnapshot, logger: logging.Logger) -> Win32WindowSnapshot:
+    """GEV workflow action 직전에 표시 그룹 설정창을 fresh read/focus/size 검증한다."""
+    current = read_win32_window_snapshot(dialog.hwnd)
+    if current is None:
+        raise DisplayGroupInspectionError(f"표시 그룹 설정창을 찾지 못해 GEV workflow를 중단합니다: HWND={dialog.hwnd}")
+    if "표시 그룹 설정" not in current.title:
+        raise DisplayGroupInspectionError(
+            "GEV 표시 그룹 설정창 title이 예상과 다릅니다. "
+            f"title={current.title!r}, class={current.class_name!r}, HWND={current.hwnd}"
+        )
+    if current.class_name != "#32770":
+        raise DisplayGroupInspectionError(
+            "GEV 표시 그룹 설정창 class가 예상과 다릅니다. "
+            f"title={current.title!r}, class={current.class_name!r}, HWND={current.hwnd}"
+        )
+    if not current.visible or not current.enabled:
+        raise DisplayGroupInspectionError(
+            "GEV 표시 그룹 설정창이 visible/enabled 상태가 아니어서 workflow를 중단합니다. "
+            f"title={current.title} | class={current.class_name} | HWND={current.hwnd} | "
+            f"visible={current.visible} | enabled={current.enabled}"
+        )
+
+    focus_win32_window_if_possible(current.hwnd, logger)
+    current = read_win32_window_snapshot(dialog.hwnd) or current
+    require_display_group_gev_workflow_profile(current, logger)
+
+    try:
+        import win32con
+        import win32gui
+
+        foreground = win32gui.GetForegroundWindow()
+        foreground_root = win32gui.GetAncestor(foreground, win32con.GA_ROOT) if foreground else 0
+        if foreground not in (0, dialog.hwnd) and foreground_root != dialog.hwnd:
+            raise DisplayGroupInspectionError(
+                "GEV 표시 그룹 설정창이 foreground를 잃어 workflow를 중단합니다. "
+                f"dialog_hwnd={dialog.hwnd} | foreground_hwnd={foreground} | foreground_root={foreground_root}"
+            )
+    except DisplayGroupInspectionError:
+        raise
+    except Exception as exc:
+        logger.debug("GEV 표시 그룹 설정창 foreground 확인을 건너뜁니다: %s", exc)
+    return current
+
+
 def relative_point_from_coordinate_profile(profile: dict[str, object], key: str) -> tuple[float, float]:
     """dict 기반 Display Group coordinate profile에서 rel point를 읽는다."""
     value = profile[key]
@@ -3795,6 +4228,51 @@ def build_display_group_max_48_confirmed_sequence_from_coordinate_profile(
     return tuple(steps)
 
 
+def build_display_group_gev_confirmed_sequence_from_coordinate_profile(
+    dialog_rect: tuple[int, int, int, int],
+    coordinate_profile: dict[str, object],
+) -> tuple[ActualClickTestStep, ...]:
+    """GP20 .GEV workflow 전용 explicit relative-coordinate sequence."""
+    step_no = 1
+    steps: list[ActualClickTestStep] = []
+
+    def click_step(action_type: str, description: str, key: str, *, move_before_click: bool = False) -> None:
+        nonlocal step_no
+        steps.append(
+            ActualClickTestStep(
+                step_no,
+                action_type,
+                profile_step_description(description, key, profile=coordinate_profile),
+                point=point_from_coordinate_profile(dialog_rect, coordinate_profile, key),
+                move_before_click=move_before_click,
+            )
+        )
+        step_no += 1
+
+    def drag_step(action_type: str, description: str, start_key: str, end_key: str) -> None:
+        nonlocal step_no
+        steps.append(
+            ActualClickTestStep(
+                step_no,
+                action_type,
+                profile_step_description(description, start_key, end_key, profile=coordinate_profile),
+                drag_start=point_from_coordinate_profile(dialog_rect, coordinate_profile, start_key),
+                drag_end=point_from_coordinate_profile(dialog_rect, coordinate_profile, end_key),
+            )
+        )
+        step_no += 1
+
+    click_step("tab_02_click", "group/page 02 tab 클릭", "tab_02")
+    drag_step("source_drag_select", "source group/page 02 W01~W20 drag/select", "source_w01_start", "source_w20_end")
+    click_step("copy_detail_click", "복사상세 버튼 클릭", "copy_detail", move_before_click=True)
+    click_step("tab_01_click", "group/page 01 tab 클릭", "tab_01")
+    click_step("scrollbar_down_click", "group/page 01 scrollbar down area click", "scroll_down")
+    drag_step("destination_drag_select", "destination group/page 01 W21~W40 drag/select (profile GEV scrolled view)", "dest_w21_start", "dest_w40_end")
+    click_step("paste_click", "붙임 버튼 클릭 | source group/page 02 to destination W21~W40", "paste", move_before_click=True)
+    click_step("ok_click", "GEV Display Group Settings workflow OK 버튼 클릭", "ok")
+    return tuple(steps)
+
+
 def convert_actual_steps_to_planned_actions(
     steps: tuple[ActualClickTestStep, ...],
 ) -> tuple[PlannedGeometryAction, ...]:
@@ -3860,6 +4338,37 @@ def build_display_group_max_48_sequence_for_dialog(
     raise DisplayGroupInspectionError(
         "Display Group Settings size does not match verified C profile; "
         "aborting instead of using old coordinates."
+    )
+
+
+def build_display_group_gev_sequence_for_dialog(
+    dialog: Win32WindowSnapshot,
+    geometry: DisplayGroupGeometryReport,
+    *,
+    required_coordinate_profile: dict[str, object] | None = None,
+) -> tuple[ActualClickTestStep, ...]:
+    """현재 dialog layout에 맞는 GEV workflow sequence를 만든다."""
+    coordinate_profile = select_display_group_gev_workflow_profile(dialog)
+    if required_coordinate_profile is not None:
+        if coordinate_profile is not required_coordinate_profile:
+            rect = parse_rectangle_text(dialog.rectangle)
+            actual_size = display_group_dialog_size(rect) if rect is not None else "unknown"
+            raise DisplayGroupInspectionError(
+                "GEV Display Group coordinate profile changed or no longer matches the fresh dialog. "
+                "Aborting before clicking. "
+                f"title={dialog.title!r}, class={dialog.class_name!r}, size={actual_size}, rectangle={dialog.rectangle!r}"
+            )
+        return build_display_group_gev_confirmed_sequence_from_coordinate_profile(
+            geometry.dialog_rect,
+            required_coordinate_profile,
+        )
+    if coordinate_profile is not None:
+        return build_display_group_gev_confirmed_sequence_from_coordinate_profile(
+            geometry.dialog_rect,
+            coordinate_profile,
+        )
+    raise DisplayGroupInspectionError(
+        "GEV Display Group Settings size does not match verified GEV profile; aborting before clicking."
     )
 
 

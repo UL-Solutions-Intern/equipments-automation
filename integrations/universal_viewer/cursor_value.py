@@ -1860,9 +1860,20 @@ def move_window(hwnd: int, x: int, y: int, width: int, height: int) -> None:
 def focus_window(hwnd: int) -> None:
     """Win32 SetForegroundWindow로 특정 창에 포커스를 준다."""
     try:
+        import win32api
+        import win32con
         import win32gui
 
-        win32gui.SetForegroundWindow(hwnd)
+        try:
+            win32gui.SetForegroundWindow(hwnd)
+            return
+        except Exception:
+            # Windows may reject a background process's first foreground
+            # request. A momentary Alt key transition grants the calling
+            # thread a legitimate foreground activation retry.
+            win32api.keybd_event(win32con.VK_MENU, 0, 0, 0)
+            win32api.keybd_event(win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0)
+            win32gui.SetForegroundWindow(hwnd)
     except Exception as exc:  # pragma: no cover - GUI 환경 의존 경로
         raise CursorValueError(f"Universal Viewer 창 포커스 실패: hwnd={hwnd} ({exc})") from exc
 

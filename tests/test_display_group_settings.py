@@ -18,6 +18,7 @@ from integrations.universal_viewer.display_group_settings import (
     ActualClickTestStep,
     DISPLAY_GROUP_MENU_PATH,
     DISPLAY_GROUP_PROFILE_C_WORKFLOW_942x736,
+    DISPLAY_GROUP_PROFILE_GEV_WORKFLOW,
     DEFAULT_DISPLAY_GROUP_GEOMETRY_PROFILE,
     DisplayGroupDialogSnapshot,
     DisplayGroupInspectionError,
@@ -30,9 +31,11 @@ from integrations.universal_viewer.display_group_settings import (
     UNIVERSAL_VIEWER_TIME_AXIS_MENU_REL,
     apply_display_group_geometry_actions_confirmed,
     apply_display_group_geometry_actions_test,
+    apply_display_group_gev_workflow,
     apply_display_group_max_48_confirmed,
     apply_time_axis_full_display_by_coordinates,
     apply_time_axis_full_display_by_uia,
+    build_display_group_gev_confirmed_sequence_from_coordinate_profile,
     build_display_group_max_48_confirmed_sequence,
     build_display_group_max_48_confirmed_sequence_from_coordinate_profile,
     calculate_display_group_max_48_action_preview,
@@ -59,6 +62,9 @@ from integrations.universal_viewer.display_group_settings import (
     preview_display_group_max_48_actions,
     scrollbar_up_click_coordinate,
     select_display_group_coordinate_profile,
+    select_display_group_gev_workflow_profile,
+    select_display_group_workflow_for_raw_path,
+    validate_display_group_gev_sequence,
 )
 from integrations.universal_viewer.main import build_parser, main
 from integrations.universal_viewer.viewer_discovery import WindowInfo
@@ -181,6 +187,34 @@ class DisplayGroupSettingsTests(unittest.TestCase):
             ),
         )
 
+    def test_dae_extension_selects_existing_dae_workflow_branch(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config = AppConfig(project_root=Path(temp_dir))
+            sentinel = SimpleNamespace(workflow="DAE")
+
+            with patch.object(display_group_settings_module, "_apply_display_group_dae_max_48_confirmed", return_value=sentinel) as dae:
+                with patch.object(display_group_settings_module, "apply_display_group_gev_workflow", side_effect=AssertionError("GEV branch must not run")):
+                    result = apply_display_group_max_48_confirmed(Path("sample.DAE"), config, self.logger)
+
+        self.assertIs(result, sentinel)
+        dae.assert_called_once()
+
+    def test_gev_extension_selects_new_gev_workflow_branch(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config = AppConfig(project_root=Path(temp_dir))
+            sentinel = SimpleNamespace(workflow="GEV")
+
+            with patch.object(display_group_settings_module, "_apply_display_group_dae_max_48_confirmed", side_effect=AssertionError("DAE branch must not run")):
+                with patch.object(display_group_settings_module, "apply_display_group_gev_workflow", return_value=sentinel) as gev:
+                    result = apply_display_group_max_48_confirmed(Path("sample.GEV"), config, self.logger)
+
+        self.assertIs(result, sentinel)
+        gev.assert_called_once()
+
+    def test_display_group_workflow_extension_matching_is_case_insensitive(self) -> None:
+        self.assertEqual(select_display_group_workflow_for_raw_path(Path("sample.dAe")), "DAE")
+        self.assertEqual(select_display_group_workflow_for_raw_path(Path("sample.gEv")), "GEV")
+
     def test_c_display_group_profile_selects_by_title_class_and_size(self) -> None:
         dialog = Win32WindowSnapshot(
             200,
@@ -196,6 +230,90 @@ class DisplayGroupSettingsTests(unittest.TestCase):
 
         wrong_size = Win32WindowSnapshot(200, "표시 그룹 설정", "#32770", 1111, True, True, "(10, 20, 638, 511)")
         self.assertIsNone(select_display_group_coordinate_profile(wrong_size))
+
+    def test_gev_profile_size_validation_accepts_size_within_tolerance(self) -> None:
+        dialog = Win32WindowSnapshot(
+            200,
+            "표시 그룹 설정 - GP20",
+            "#32770",
+            1111,
+            True,
+            True,
+            "(0, 0, 942, 736)",
+        )
+
+        self.assertIs(select_display_group_gev_workflow_profile(dialog), DISPLAY_GROUP_PROFILE_GEV_WORKFLOW)
+
+    def test_gev_profile_size_validation_rejects_mismatch_before_clicking(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config = AppConfig(project_root=root)
+            config.ensure_directories()
+            opened = replace(self._opened(root), source_path=root / "input" / "sample.GEV")
+            wrong_size_dialog = Win32WindowSnapshot(
+                200,
+                "표시 그룹 설정",
+                "#32770",
+                1111,
+                True,
+                True,
+                "(10, 20, 710, 620)",
+            )
+            clicks: list[tuple[int, int]] = []
+
+            with self.assertRaisesRegex(DisplayGroupInspectionError, "before clicking"):
+                apply_display_group_gev_workflow(
+                    opened.source_path,
+                    config,
+                    self.logger,
+                    open_raw_file_fn=lambda *_args, **_kwargs: opened,
+                    menu_open_fn=lambda _opened, _logger: DISPLAY_GROUP_MENU_PATH,
+                    dialog_detector_fn=lambda _pid, _baseline, _logger: wrong_size_dialog,
+                    raw_hint_collector=lambda _handle: (opened.work_copy_path.name,),
+                    click_fn=lambda point: clicks.append(point),
+                    drag_fn=lambda _start, _end: self.fail("GEV mismatch must abort before dragging"),
+                    move_fn=lambda _point: None,
+                    scroll_fn=lambda _amount: None,
+                    wait_fn=lambda _seconds: None,
+                    close_dialog_fn=lambda _logger: "ESC",
+                    popup_detector_fn=lambda _pid: (),
+                    time_axis_full_display_fn=lambda *_args, **_kwargs: None,
+                    message_printer=lambda _message: None,
+                )
+
+        self.assertEqual(clicks, [])
+
+    def test_gev_profile_workflow_step_order(self) -> None:
+        dialog_rect = (0, 0, 942, 736)
+        sequence = build_display_group_gev_confirmed_sequence_from_coordinate_profile(
+            dialog_rect,
+            DISPLAY_GROUP_PROFILE_GEV_WORKFLOW,
+        )
+        validate_display_group_gev_sequence(sequence)
+
+        self.assertEqual(
+            tuple(step.action_type for step in sequence),
+            (
+                "tab_02_click",
+                "source_drag_select",
+                "copy_detail_click",
+                "tab_01_click",
+                "scrollbar_down_click",
+                "destination_drag_select",
+                "paste_click",
+                "ok_click",
+            ),
+        )
+        self.assertEqual(sequence[0].point, point_from_coordinate_profile(dialog_rect, DISPLAY_GROUP_PROFILE_GEV_WORKFLOW, "tab_02"))
+        self.assertEqual(sequence[1].drag_start, point_from_coordinate_profile(dialog_rect, DISPLAY_GROUP_PROFILE_GEV_WORKFLOW, "source_w01_start"))
+        self.assertEqual(sequence[1].drag_end, point_from_coordinate_profile(dialog_rect, DISPLAY_GROUP_PROFILE_GEV_WORKFLOW, "source_w20_end"))
+        self.assertEqual(sequence[2].point, point_from_coordinate_profile(dialog_rect, DISPLAY_GROUP_PROFILE_GEV_WORKFLOW, "copy_detail"))
+        self.assertEqual(sequence[3].point, point_from_coordinate_profile(dialog_rect, DISPLAY_GROUP_PROFILE_GEV_WORKFLOW, "tab_01"))
+        self.assertEqual(sequence[4].point, point_from_coordinate_profile(dialog_rect, DISPLAY_GROUP_PROFILE_GEV_WORKFLOW, "scroll_down"))
+        self.assertEqual(sequence[5].drag_start, point_from_coordinate_profile(dialog_rect, DISPLAY_GROUP_PROFILE_GEV_WORKFLOW, "dest_w21_start"))
+        self.assertEqual(sequence[5].drag_end, point_from_coordinate_profile(dialog_rect, DISPLAY_GROUP_PROFILE_GEV_WORKFLOW, "dest_w40_end"))
+        self.assertEqual(sequence[6].point, point_from_coordinate_profile(dialog_rect, DISPLAY_GROUP_PROFILE_GEV_WORKFLOW, "paste"))
+        self.assertEqual(sequence[7].point, point_from_coordinate_profile(dialog_rect, DISPLAY_GROUP_PROFILE_GEV_WORKFLOW, "ok"))
 
     def test_c_display_group_profile_relative_to_absolute_conversion(self) -> None:
         point = point_from_coordinate_profile((0, 0, 942, 736), DISPLAY_GROUP_PROFILE_C_WORKFLOW_942x736, "ok")
