@@ -38,3 +38,7 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+._*
+__pycache__/
+tmp/
