@@ -11,6 +11,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Iterable, Protocol
 
+from result_folders import RESULTS_FOLDER_NAME
+
 from .config import AppConfig
 from .pdf_validator import PdfDependencyError, PdfValidationError, validate_pdf
 from .viewer_launcher import ViewerOpenResult, open_prepared_raw_file
@@ -219,7 +221,7 @@ def copy_pdf_to_desktop_archive(
 
     archive_date = (now or datetime.now()).strftime("%Y-%m-%d")
     desktop = resolve_desktop_dir(desktop_dir)
-    archive_dir = desktop / "하이브리드레코더 pdf" / archive_date
+    archive_dir = desktop / RESULTS_FOLDER_NAME / archive_date
     archive_dir.mkdir(parents=True, exist_ok=True)
 
     destination = archive_dir / source.name

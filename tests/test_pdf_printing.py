@@ -34,6 +34,7 @@ from integrations.universal_viewer.pdf_printing import (
 )
 from integrations.universal_viewer.viewer_discovery import WindowInfo
 from integrations.universal_viewer.viewer_launcher import ViewerOpenResult
+from result_folders import RESULTS_FOLDER_NAME
 
 
 class FakeDialog:
@@ -213,7 +214,7 @@ class PdfPrintingTests(unittest.TestCase):
 
             self.assertEqual(
                 copied,
-                (desktop / "하이브리드레코더 pdf" / "2026-07-22" / "final.pdf").resolve(),
+                (desktop / RESULTS_FOLDER_NAME / "2026-07-22" / "final.pdf").resolve(),
             )
             self.assertEqual(copied.read_bytes(), source.read_bytes())
 
@@ -221,7 +222,7 @@ class PdfPrintingTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             desktop = root / "Desktop"
-            archive_day = desktop / "하이브리드레코더 pdf" / "2026-07-22"
+            archive_day = desktop / RESULTS_FOLDER_NAME / "2026-07-22"
             archive_day.mkdir(parents=True)
             source_one = root / "output" / "one.pdf"
             source_two = root / "output" / "two.pdf"
@@ -242,7 +243,7 @@ class PdfPrintingTests(unittest.TestCase):
             root = Path(directory)
             desktop = root / "Desktop"
             source = root / "output" / "same.pdf"
-            destination = desktop / "하이브리드레코더 pdf" / "2026-07-22" / "same.pdf"
+            destination = desktop / RESULTS_FOLDER_NAME / "2026-07-22" / "same.pdf"
             source.parent.mkdir(parents=True)
             destination.parent.mkdir(parents=True)
             source.write_bytes(b"same-size")
@@ -259,7 +260,7 @@ class PdfPrintingTests(unittest.TestCase):
             root = Path(directory)
             desktop = root / "Desktop"
             source = root / "output" / "collision.pdf"
-            archive_day = desktop / "하이브리드레코더 pdf" / "2026-07-22"
+            archive_day = desktop / RESULTS_FOLDER_NAME / "2026-07-22"
             destination = archive_day / "collision.pdf"
             copy2_destination = archive_day / "collision_copy2.pdf"
             source.parent.mkdir(parents=True)
@@ -285,7 +286,7 @@ class PdfPrintingTests(unittest.TestCase):
                     copy_pdf_to_desktop_archive(missing, now=datetime(2026, 7, 22), desktop_dir=desktop)
 
             copy2.assert_not_called()
-            self.assertFalse((desktop / "하이브리드레코더 pdf").exists())
+            self.assertFalse((desktop / RESULTS_FOLDER_NAME).exists())
 
     def test_successful_print_flow_copies_verified_pdf_to_archive_after_validation(self) -> None:
         with TemporaryDirectory() as directory:
@@ -304,7 +305,7 @@ class PdfPrintingTests(unittest.TestCase):
                 events.append("archive")
                 self.assertTrue(path.is_file())
                 copied_paths.append(path)
-                return root / "Desktop" / "하이브리드레코더 pdf" / "2026-07-22" / path.name
+                return root / "Desktop" / RESULTS_FOLDER_NAME / "2026-07-22" / path.name
 
             result = print_raw_file_to_pdf(
                 opened.source_path,
@@ -320,7 +321,7 @@ class PdfPrintingTests(unittest.TestCase):
             self.assertEqual(copied_paths, [result.output_pdf_path])
             self.assertEqual(
                 result.desktop_archive_pdf_path,
-                root / "Desktop" / "하이브리드레코더 pdf" / "2026-07-22" / result.output_pdf_path.name,
+                root / "Desktop" / RESULTS_FOLDER_NAME / "2026-07-22" / result.output_pdf_path.name,
             )
             self.assertEqual(result.desktop_archive_warning, "")
 

@@ -133,7 +133,7 @@ PDF 원본은 다운로드된 `.DAE` 또는 `.GEV` 파일과 같은 결과 폴�
 
 ```text
 바탕화면/
-└─ 하이브리드레코더 pdf/
+└─ 3. Heating Test Result/
    └─ YYYY-MM-DD/
       └─ 결과.pdf
 ```

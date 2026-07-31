@@ -33,7 +33,7 @@ class OverloadCandidate:
 
 
 def format_ampere_filename_suffix(value) -> str:
-    """Format a PM_A value for appending to the generated PDF filename."""
+    """Format a PM_A value for appending to generated result filenames."""
     if value is None:
         return ""
 
@@ -432,12 +432,12 @@ class TestRunner:
                 condition,
                 condition_elapsed_seconds,
             )
+            local_filename_stem += format_ampere_filename_suffix(last_pm_current)
 
             if recorder_started:
                 self._download_and_convert_recording(
                     recorder_files_before,
                     local_filename_stem,
-                    pm_current=last_pm_current,
                 )
 
         return condition_elapsed_seconds, overload_candidate
@@ -470,8 +470,6 @@ class TestRunner:
         self,
         recorder_files_before,
         local_filename_stem,
-        *,
-        pm_current=None,
     ):
         try:
             result = self.recorder.download_recording_file(
@@ -486,12 +484,7 @@ class TestRunner:
             if self.pdf_converter is None:
                 return
             try:
-                pdf_filename_suffix = format_ampere_filename_suffix(pm_current)
-                pdf_result = self.pdf_converter(
-                    local_path,
-                    self.log,
-                    pdf_filename_suffix=pdf_filename_suffix,
-                )
+                pdf_result = self.pdf_converter(local_path, self.log)
                 self.log(
                     f"PDF saved: {pdf_result.output_pdf_path} "
                     f"({pdf_result.pdf_size_bytes} bytes)"

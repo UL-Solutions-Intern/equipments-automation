@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 
-RESULTS_FOLDER_NAME = "하이브리드레코더 pdf"
+RESULTS_FOLDER_NAME = "3. Heating Test Result"
 
 
 def resolve_desktop_folder() -> Path:

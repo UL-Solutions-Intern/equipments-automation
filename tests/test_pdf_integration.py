@@ -19,8 +19,10 @@ class FakeStopEvent:
 
 
 class FakeRecorder:
-    def __init__(self, raw_path):
+    def __init__(self, raw_path, *, use_local_filename_stem=False):
         self.raw_path = raw_path
+        self.use_local_filename_stem = use_local_filename_stem
+        self.downloaded_stems = []
 
     def snapshot_recording_files(self):
         return {"previous.DAE"}
@@ -34,9 +36,15 @@ class FakeRecorder:
     def get_temperature_values(self, _first, _last):
         return {"0001": 25.0}
 
-    def download_recording_file(self, _folder, previous_files, _local_filename_stem):
+    def download_recording_file(self, _folder, previous_files, local_filename_stem):
         assert previous_files == {"previous.DAE"}
-        return "result.DAE", self.raw_path, 123
+        self.downloaded_stems.append(local_filename_stem)
+        local_path = self.raw_path
+        if self.use_local_filename_stem and local_filename_stem:
+            local_path = self.raw_path.with_name(
+                f"{local_filename_stem}{self.raw_path.suffix}"
+            )
+        return "result.DAE", local_path, 123
 
 
 class FakePowerMeter:
@@ -242,21 +250,22 @@ class PdfIntegrationTests(TestCase):
         self.assertEqual(calls, [(raw_path, logs.append, "")])
         self.assertTrue(any("PDF saved: result.pdf (456 bytes)" in line for line in logs))
 
-    def test_downloaded_pdf_filename_suffix_uses_pm_a_value(self):
+    def test_downloaded_raw_and_pdf_filenames_use_pm_a_value(self):
         raw_path = Path("result.DAE")
         calls = []
         logs = []
         power_meter = FakePowerMeter("3.4614E-01")
+        recorder = FakeRecorder(raw_path, use_local_filename_stem=True)
 
         def convert(path, log_callback, *, pdf_filename_suffix=""):
             calls.append((path, log_callback, pdf_filename_suffix))
             return SimpleNamespace(
-                output_pdf_path=Path("result_0.346A.pdf"),
+                output_pdf_path=path.with_suffix(".pdf"),
                 pdf_size_bytes=456,
             )
 
         runner = TestRunner(
-            recorder=FakeRecorder(raw_path),
+            recorder=recorder,
             power_meter=power_meter,
             output_folder=self.temp_directory.name,
             log_callback=logs.append,
@@ -278,8 +287,10 @@ class PdfIntegrationTests(TestCase):
         runner.run(plan, FakeStopEvent())
 
         self.assertTrue(power_meter.initialized)
-        self.assertEqual(calls, [(raw_path, logs.append, "_0.346A")])
-        self.assertTrue(any("PDF saved: result_0.346A.pdf (456 bytes)" in line for line in logs))
+        self.assertEqual(len(recorder.downloaded_stems), 1)
+        self.assertTrue(recorder.downloaded_stems[0].endswith("_0.346A"))
+        self.assertEqual(calls, [(raw_path.with_name(f"{recorder.downloaded_stems[0]}.DAE"), logs.append, "")])
+        self.assertTrue(any("_0.346A.pdf (456 bytes)" in line for line in logs))
 
     def test_pdf_failure_does_not_fail_recorder_download(self):
         raw_path = Path("result.GEV")

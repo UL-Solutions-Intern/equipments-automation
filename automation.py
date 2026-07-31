@@ -57,7 +57,7 @@ class PowerAnalyzerGUI:
         # VISA Resource Manager 생성
         self.rm = pyvisa.ResourceManager()
 
-        # 기본 저장 루트 = 바탕화면/하이브리드레코더 pdf
+        # 기본 저장 루트 = 바탕화면/3. Heating Test Result
         self.save_root_folder = str(default_results_root())
         self.save_folder = self.save_root_folder
 
