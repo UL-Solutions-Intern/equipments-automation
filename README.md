@@ -1,9 +1,10 @@
 # Equipment Automation
 
-[한국어 README](README_KR.md)
+**Language:** English | [Korean](README_KR.md)
 
 ## Overview
 
+The project required troubleshooting across laboratory instruments, communication interfaces, FTP workflows, and Windows desktop applications.
 Equipment Automation is a Windows-based Python application that coordinates laboratory heating tests and turns a multi-step equipment workflow into a repeatable test plan. From a Tkinter interface, an engineer can select AC or DC conditions, configure Recorder channels and sampling intervals, connect optional power equipment, and run sequential tests while measurements are written to CSV.
 
 The application integrates laboratory instruments over VISA, serial, and LAN/socket connections. It controls a required Yokogawa Recorder, optionally configures a CVCF power supply and reads a WT310 power meter, retrieves the Recorder's native `.DAE` or `.GEV` file over FTP, and drives Yokogawa Universal Viewer plus Microsoft Print to PDF to produce a report.
@@ -353,8 +354,6 @@ Avoid interacting with Universal Viewer or its print dialogs while UI automation
 
 ## Team
 
-- 박준석
-- 조은이
-- 최수아
-
-This section identifies the documented team members only; it does not assign every feature to every person.
+- Junseok Park
+- Choeun Lee
+- Sua Choi
