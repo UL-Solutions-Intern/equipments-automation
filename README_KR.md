@@ -4,6 +4,29 @@
 
 Tkinter GUI에서 장비 주소와 시험 조건, 결과 저장 폴더를 지정하면 Recorder를 중심으로 시험을 실행합니다. 시험 조건이 끝나면 Recorder에서 `.DAE` 또는 `.GEV` 원본 파일을 FTP로 내려받고, Universal Viewer를 이용한 전체 보고서 과정을 거쳐 PDF를 생성합니다.
 
+## 실행 화면
+
+<p align="center">
+  <img src="docs/assets/image/test/UI.png" alt="Equipment Automation 메인 화면" width="820">
+</p>
+<p align="center"><sub>장비 연결, 시험 조건, 채널, 결과 폴더를 한 화면에서 설정하는 메인 UI</sub></p>
+
+### 장비 연결 및 시험 실행
+
+<p align="center">
+  <img src="docs/assets/video/장비연결_테스트실행.gif" alt="장비 연결 및 테스트 실행 영상" width="820">
+</p>
+
+장비 주소와 시험 조건을 입력하고 연결 상태를 확인한 뒤 시험을 시작하면 측정값이 실시간으로 기록됩니다.
+
+### Recorder 결과 수집 및 PDF 생성
+
+<p align="center">
+  <img src="docs/assets/video/PDF생성.gif" alt="Recorder 결과 수집 및 PDF 생성 영상" width="820">
+</p>
+
+시험 종료 후 Recorder 원본을 내려받고 Universal Viewer를 제어하여 PDF 보고서를 생성·보관합니다.
+
 ## 프로젝트 배경 및 개선 과정
 
 초기 버전은 `automation.py` 한 파일에 Tkinter GUI, VISA·Serial·LAN 통신, 장비별 명령, 온도 및 전력 측정, 포화 판정, CSV 저장이 모두 포함된 구조였습니다. GP20과 WT310을 중심으로 기본 시험을 수행할 수 있었지만, 장비별 처리와 시험 흐름이 강하게 결합되어 장비 모델을 추가하거나 일부 장비 없이 시험하기 어려웠습니다.
@@ -48,6 +71,18 @@ Tkinter GUI에서 장비 주소와 시험 조건, 결과 저장 폴더를 지정
 
 ## 지원 장비
 
+<table>
+  <tr>
+    <td align="center"><img src="docs/assets/image/device/recorder-yokogawa-GP20.jpg" alt="Yokogawa GP20" width="220"><br><sub>Yokogawa GP20</sub></td>
+    <td align="center"><img src="docs/assets/image/device/recorder-yokogawa-mv2000.jpg" alt="Yokogawa MV2000" width="220"><br><sub>Yokogawa MV2000</sub></td>
+    <td align="center"><img src="docs/assets/image/device/power-meter-yokogawa-wt310e.png" alt="Yokogawa WT310E" width="220"><br><sub>Yokogawa WT310E</sub></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2"><img src="docs/assets/image/device/power-supply-apt-6000-series.jpg" alt="APT Series 6000" width="300"><br><sub>APT Series 6000</sub></td>
+    <td align="center"><img src="docs/assets/image/device/power-supply-kikusui-pcr-6000-le.jpg" alt="Kikusui PCR-6000LE" width="220"><br><sub>Kikusui PCR-6000LE</sub></td>
+  </tr>
+</table>
+
 ### Recorder
 
 - Yokogawa GP20
@@ -84,6 +119,18 @@ Recorder는 필수이며 CVCF와 Power Meter는 시험 구성에 따라 생략�
 
 PDF 변환에 실패하더라도 이미 저장된 CSV와 Recorder 원본 파일은 유지됩니다. 실패 이유는 GUI 로그에 `PDF conversion error`로 표시됩니다.
 
+### 실행 상태 예시
+
+| 시험 시작 | 다음 조건 전환 | 포화 미달 시 재측정 |
+|---|---|---|
+| <img src="docs/assets/image/test/test_start.png" alt="첫 번째 시험 조건 시작 로그" width="300"> | <img src="docs/assets/image/test/test_next_wait.png" alt="대기 후 다음 시험 조건 시작 로그" width="300"> | <img src="docs/assets/image/test/saturation_fail.png" alt="포화 미달로 재확인하는 로그" width="300"> |
+
+시험이 끝나면 결과 폴더에 측정 CSV, Recorder 원본(`.DAE` 또는 `.GEV`), PDF 보고서가 함께 저장됩니다.
+
+<p align="center">
+  <img src="docs/assets/image/test/test_result.png" alt="CSV, Recorder 원본, PDF가 저장된 시험 결과 폴더" width="820">
+</p>
+
 ## 포화 판정
 
 현재 기본 계획값은 `automation.py`의 `TestPlan` 생성부에서 설정합니다.
@@ -97,6 +144,14 @@ saturation_recheck_seconds=600
 포화 상태는 모든 온도 채널의 현재값과 30분 전 값의 차이가 `1.5°C` 미만인지 확인하여 판정합니다. 포화 판정이 활성화된 시험은 GUI의 기본 시험시간에 도달하더라도 포화될 때까지 측정을 연장할 수 있습니다.
 
 시험용으로 최초 판정 시간을 짧게 변경하더라도 `StabilizationTracker`의 기본 비교 구간은 1800초이므로, 30분 이력이 쌓이기 전에는 포화로 판정되지 않습니다.
+
+## 오버로드 시험
+
+오버로드 시험을 활성화하면 Coil 채널, 시작 시각, 대상 시험을 지정할 수 있습니다. 예약 시각이 되면 선택한 조건으로 시험을 시작하고 지정 채널의 온도를 로그에 표시합니다.
+
+| 오버로드 시험 설정 | 예약 실행 로그 |
+|---|---|
+| <img src="docs/assets/image/test/overload1.png" alt="오버로드 대상 시험과 시작 시각 설정" width="430"> | <img src="docs/assets/image/test/overload2.png" alt="오버로드 시험 예약 및 실행 로그" width="560"> |
 
 ## Universal Viewer PDF 워크플로
 
