@@ -11,6 +11,29 @@ The application integrates laboratory instruments over VISA, serial, and LAN/soc
 
 The original implementation concentrated the GUI, communication transports, instrument commands, measurement logic, stabilization checks, and CSV output in `automation.py`. The current repository retains that GUI entry point while moving test models, orchestration, model-specific drivers, FTP transfer, result-folder management, and Universal Viewer automation into focused modules.
 
+## Demo
+
+<p align="center">
+  <img src="docs/assets/image/test/UI_eng.png" alt="Equipment Automation main interface" width="820">
+</p>
+<p align="center"><sub>Main interface for device connections, test conditions, channels, and result paths</sub></p>
+
+### Device connection and test execution
+
+<p align="center">
+  <img src="docs/assets/video/장비연결_테스트실행.gif" alt="Connecting equipment and running a test" width="820">
+</p>
+
+The application connects the configured instruments, starts the selected condition, and records live measurements without blocking the GUI.
+
+### Recorder retrieval and PDF generation
+
+<p align="center">
+  <img src="docs/assets/video/PDF생성.gif" alt="Retrieving Recorder data and generating a PDF" width="820">
+</p>
+
+After a test completes, the application retrieves the Recorder file and controls Universal Viewer to generate and retain the PDF report.
+
 ## Impact
 
 Impact measurement is in progress. The placeholders below are intentionally not estimates or claimed results.
@@ -123,7 +146,7 @@ For models compatible with an existing equipment category and workflow, model-sp
 
 For each condition, `TestRunner` can configure and enable the CVCF, snapshot the Recorder's FTP listing, start recording, sample temperatures and power, flush each row to CSV, evaluate stabilization, and publish progress. Cleanup attempts to stop recording and disable CVCF output even when the condition exits through an exception or user stop.
 
-Multiple voltage/frequency conditions run sequentially with a configurable rest period. The repository also includes an optional overload workflow: it tracks the highest numeric temperature observed on a selected coil channel during normal conditions, then reruns that condition until the operator requests a stop.
+Multiple voltage/frequency conditions run sequentially with a configurable rest period. The optional overload workflow tracks the highest temperature observed on the configured Coil channel across all normal conditions. After the configured overload rest time, it automatically selects and reruns the condition in which that peak occurred. The overload rerun is not stopped by the normal test-duration setting and continues until the operator requests a stop.
 
 ### Reliability and failure isolation
 
@@ -211,6 +234,18 @@ Evaluating the full range is a reasonable future enhancement because it would ca
 
 ## Supported Equipment
 
+<table>
+  <tr>
+    <td align="center"><img src="docs/assets/image/device/recorder-yokogawa-GP20.jpg" alt="Yokogawa GP20" width="220"><br><sub>Yokogawa GP20</sub></td>
+    <td align="center"><img src="docs/assets/image/device/recorder-yokogawa-mv2000.jpg" alt="Yokogawa MV2000" width="220"><br><sub>Yokogawa MV2000</sub></td>
+    <td align="center"><img src="docs/assets/image/device/power-meter-yokogawa-wt310e.png" alt="Yokogawa WT310E" width="220"><br><sub>Yokogawa WT310E</sub></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2"><img src="docs/assets/image/device/power-supply-apt-6000-series.jpg" alt="APT Series 6000" width="300"><br><sub>APT Series 6000</sub></td>
+    <td align="center"><img src="docs/assets/image/device/power-supply-kikusui-pcr-6000-le.jpg" alt="Kikusui PCR-6000LE" width="220"><br><sub>Kikusui PCR-6000LE</sub></td>
+  </tr>
+</table>
+
 ### Recorder
 
 - Yokogawa GP20 — LAN control, `.GEV` results, channel blocks ending in 01–10
@@ -239,6 +274,27 @@ The Recorder is required. CVCF and power-meter addresses may be left blank for R
 8. Detect and download the new native Recorder file using a partial-file safeguard.
 9. Run the Universal Viewer/PDF workflow and validate the output.
 10. Wait for the configured cooldown and continue to the next condition.
+11. When overload testing is enabled, wait for the configured overload rest time and rerun the condition that produced the selected Coil channel's highest temperature.
+
+### Execution examples
+
+| Test start | Next condition | Stabilization recheck |
+|---|---|---|
+| <img src="docs/assets/image/test/test_start.png" alt="First test condition starting" width="300"> | <img src="docs/assets/image/test/test_next_wait.png" alt="Next test condition starting after cooldown" width="300"> | <img src="docs/assets/image/test/saturation_fail.png" alt="Stabilization check scheduling another measurement" width="300"> |
+
+The final result directory keeps the timestamped CSV, native Recorder file, and generated PDF together.
+
+<p align="center">
+  <img src="docs/assets/image/test/test_result.png" alt="CSV, Recorder source, and PDF in the result directory" width="820">
+</p>
+
+### Automatic overload condition selection
+
+When overload testing is enabled, the system monitors the configured Coil channel during every normal condition. It remembers the condition associated with the highest measured temperature, displays that automatically selected target in the UI, waits for the configured overload rest time, and runs that condition again as the overload test. The overload run continues until the operator presses **Stop Test**.
+
+| Overload configuration and selected target | Overload execution log |
+|---|---|
+| <img src="docs/assets/image/test/overload1.png" alt="Overload Coil channel, rest time, and automatically selected target" width="430"> | <img src="docs/assets/image/test/overload2.png" alt="Automatically selected overload condition execution log" width="560"> |
 
 ## Universal Viewer Automation
 

@@ -116,6 +116,7 @@ Recorder는 필수이며 CVCF와 Power Meter는 시험 구성에 따라 생략�
 7. 새로 생성된 `.DAE` 또는 `.GEV` 파일을 FTP로 내려받습니다.
 8. 다운로드에 성공하면 Universal Viewer PDF 워크플로를 실행합니다.
 9. 다음 시험 조건이 있으면 cooldown 후 반복합니다.
+10. 오버로드 시험이 활성화되어 있으면 모든 일반 시험에서 지정 Coil 채널의 온도가 가장 높았던 조건을 선택하고, 설정한 오버로드 쉬는 시간 후 해당 조건을 다시 실행합니다.
 
 PDF 변환에 실패하더라도 이미 저장된 CSV와 Recorder 원본 파일은 유지됩니다. 실패 이유는 GUI 로그에 `PDF conversion error`로 표시됩니다.
 
@@ -147,11 +148,13 @@ saturation_recheck_seconds=600
 
 ## 오버로드 시험
 
-오버로드 시험을 활성화하면 Coil 채널, 시작 시각, 대상 시험을 지정할 수 있습니다. 예약 시각이 되면 선택한 조건으로 시험을 시작하고 지정 채널의 온도를 로그에 표시합니다.
+오버로드 시험을 활성화하면 사용자가 Coil 채널과 오버로드 쉬는 시간을 설정합니다. 시스템은 모든 일반 시험 조건에서 해당 Coil 채널의 온도를 추적하고, 측정된 최고 온도가 나온 시험 조건을 오버로드 대상으로 자동 선택하여 UI에 표시합니다. 일반 시험이 모두 끝나고 설정한 쉬는 시간이 지나면 선택된 조건을 오버로드 시험으로 한 번 더 실행합니다.
 
-| 오버로드 시험 설정 | 예약 실행 로그 |
+오버로드 재시험은 일반 시험시간 설정으로 자동 종료되지 않으며, 사용자가 **테스트 중지** 버튼을 누를 때 종료됩니다.
+
+| 오버로드 설정 및 자동 선택된 대상 | 오버로드 실행 로그 |
 |---|---|
-| <img src="docs/assets/image/test/overload1.png" alt="오버로드 대상 시험과 시작 시각 설정" width="430"> | <img src="docs/assets/image/test/overload2.png" alt="오버로드 시험 예약 및 실행 로그" width="560"> |
+| <img src="docs/assets/image/test/overload1.png" alt="오버로드 Coil 채널, 쉬는 시간, 자동 선택된 대상 시험" width="430"> | <img src="docs/assets/image/test/overload2.png" alt="자동 선택된 오버로드 조건의 실행 로그" width="560"> |
 
 ## Universal Viewer PDF 워크플로
 
