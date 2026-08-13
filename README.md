@@ -66,7 +66,7 @@ The PDF pipeline validates the raw file, creates and verifies a working copy, di
 | Test execution | Conditions and stabilization were handled in GUI code | Validated test plans are executed by a shared runner |
 | Recorder results | Documented manual/USB movement after recording | New `.DAE` or `.GEV` files are detected and retrieved over FTP |
 | PDF reporting | Manual Universal Viewer workflow | Viewer configuration, cursor adjustment, printing, and validation are orchestrated |
-| Operator involvement | [BEFORE_MIN] min | [AFTER_MIN] min |
+| Operator involvement | 40 min | 6 min |
 
 ## Workflow Transformation
 
