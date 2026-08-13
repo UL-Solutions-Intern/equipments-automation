@@ -34,17 +34,6 @@ The application connects the configured instruments, starts the selected conditi
 
 After a test completes, the application retrieves the Recorder file and controls Universal Viewer to generate and retain the PDF report.
 
-## Impact
-
-Impact measurement is in progress. The placeholders below are intentionally not estimates or claimed results.
-
-| Metric | Before | After | Improvement |
-|---|---:|---:|---:|
-| Direct operator time per test | [BEFORE_MIN] min | [AFTER_MIN] min | [REDUCTION_PERCENT]% |
-| Time saved per test | — | — | [SAVED_MIN] min |
-| Evaluation sample | [N_ENGINEERS] engineers / [N_TEST_RUNS] test runs | — | — |
-| Evidence source | [actual measurement / engineering records / engineer-reported estimates / mixture] | — | — |
-
 **Direct operator time** means time spent actively configuring the test, operating equipment, starting or stopping activities, monitoring or intervening, handling Recorder files, configuring Universal Viewer, generating the PDF, and organizing results. It excludes unattended equipment operating or waiting time. Any future results should label measured data, recorded data, and engineer-reported estimates separately.
 
 ## Problem / Before Automation
